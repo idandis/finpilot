@@ -117,8 +117,7 @@ const filteredTransactions = computed(() => {
         if (
             categoryFilter.value !== 'all' &&
             categoryFilter.value !== 'uncategorized' &&
-            String(transaction.transaction_category_id) !==
-                categoryFilter.value
+            String(transaction.transaction_category_id) !== categoryFilter.value
         ) {
             return false;
         }
@@ -298,8 +297,8 @@ function destroyAllTransactions() {
                             v-if="transactions.length === 0"
                             class="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground"
                         >
-                            Nessuna transazione per {{ monthLabel }}. Importa
-                            un estratto conto CSV qui sotto per iniziare.
+                            Nessuna transazione per {{ monthLabel }}. Importa un
+                            estratto conto CSV qui sotto per iniziare.
                         </div>
 
                         <div
@@ -423,6 +422,63 @@ function destroyAllTransactions() {
                                 </TableRow>
                             </TableBody>
                         </Table>
+
+                        <Form
+                            v-bind="
+                                TransactionImportController.store.form(card.id)
+                            "
+                            reset-on-success
+                            class="flex flex-wrap items-end gap-4 rounded-lg border p-4"
+                            v-slot="{ errors, processing }"
+                        >
+                            <div class="grid gap-2">
+                                <label for="file" class="text-sm font-medium">
+                                    Importa estratto conto (CSV o PDF Trade
+                                    Republic)
+                                </label>
+                                <input
+                                    id="file"
+                                    name="file"
+                                    type="file"
+                                    accept=".csv,.txt,.pdf"
+                                    required
+                                    class="h-9 w-full max-w-sm rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none file:mr-3 file:h-full file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                />
+                                <InputError :message="errors.file" />
+                            </div>
+
+                            <Button
+                                type="submit"
+                                variant="secondary"
+                                :disabled="processing"
+                            >
+                                Importa
+                            </Button>
+                        </Form>
+
+                        <div
+                            v-if="accountTransactionsCount > 0"
+                            class="flex items-center justify-between rounded-lg border border-destructive/30 p-4"
+                        >
+                            <div class="space-y-0.5">
+                                <p class="text-sm font-medium">
+                                    Import andato male?
+                                </p>
+                                <p class="text-xs text-muted-foreground">
+                                    Elimina tutte le
+                                    {{ accountTransactionsCount }} transazioni
+                                    di questo conto (tutti i mesi) e reimporta
+                                    l'estratto conto da capo.
+                                </p>
+                            </div>
+                            <Button
+                                variant="destructive"
+                                size="sm"
+                                @click="destroyAllTransactions"
+                            >
+                                Elimina tutto il conto
+                            </Button>
+                        </div>
                     </TabsContent>
 
                     <TabsContent value="statistiche" class="pt-4">

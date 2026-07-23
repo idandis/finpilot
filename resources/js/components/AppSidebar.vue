@@ -6,8 +6,10 @@ import {
     CreditCard,
     FolderGit2,
     LayoutGrid,
+    PiggyBank,
     Tag,
     Tags,
+    TrendingUp,
     Wallet,
 } from '@lucide/vue';
 import AppLogo from '@/components/AppLogo.vue';
@@ -25,9 +27,11 @@ import {
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
 import * as accounts from '@/routes/accounts';
+import * as budgets from '@/routes/budgets';
 import * as cards from '@/routes/cards';
 import * as categories from '@/routes/categories';
 import * as categoryRules from '@/routes/category-rules';
+import * as investments from '@/routes/investments';
 import * as overview from '@/routes/overview';
 import type { NavItem } from '@/types';
 
@@ -61,6 +65,16 @@ const mainNavItems: NavItem[] = [
         title: 'Regole categorie',
         href: categoryRules.index(),
         icon: Tags,
+    },
+    {
+        title: 'Budget',
+        href: budgets.index(),
+        icon: PiggyBank,
+    },
+    {
+        title: 'Investimenti',
+        href: investments.index(),
+        icon: TrendingUp,
     },
 ];
 

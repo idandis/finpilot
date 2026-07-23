@@ -14,15 +14,17 @@ use Illuminate\Support\Carbon;
  * @property int $financial_account_id
  * @property int|null $card_id
  * @property int|null $transaction_category_id
- * @property \Illuminate\Support\Carbon $transaction_date
+ * @property Carbon $transaction_date
  * @property string $description
+ * @property string|null $isin
+ * @property string|null $quantity
  * @property string $amount
  * @property string $direction
  * @property string $dedup_hash
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['financial_account_id', 'transaction_date', 'description', 'amount', 'direction', 'card_id', 'transaction_category_id', 'dedup_hash'])]
+#[Fillable(['financial_account_id', 'transaction_date', 'description', 'isin', 'quantity', 'amount', 'direction', 'card_id', 'transaction_category_id', 'dedup_hash'])]
 class Transaction extends Model
 {
     /** @use HasFactory<TransactionFactory> */
@@ -40,6 +42,7 @@ class Transaction extends Model
         return [
             'transaction_date' => 'date',
             'amount' => 'decimal:2',
+            'quantity' => 'decimal:8',
         ];
     }
 

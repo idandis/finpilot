@@ -2,8 +2,10 @@
 
 namespace Tests\Feature\Finance;
 
+use App\Models\Card;
 use App\Models\FinancialAccount;
 use App\Models\Transaction;
+use App\Models\TransactionCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -51,19 +53,21 @@ class OverviewTest extends TestCase
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->has('overview', 2)
+            ->has('tabs', 1)
+            ->where('tabs.0.id', 'all')
+            ->has('tabs.0.overview', 2)
             // Most recent year first.
-            ->where('overview.0.year', 2026)
-            ->where('overview.0.totals.income', 1500)
-            ->where('overview.0.totals.expense', 500)
-            ->has('overview.0.months', 12)
+            ->where('tabs.0.overview.0.year', 2026)
+            ->where('tabs.0.overview.0.totals.income', 1500)
+            ->where('tabs.0.overview.0.totals.expense', 500)
+            ->has('tabs.0.overview.0.months', 12)
             // July is month index 6 (0-based) in the 1..12 range.
-            ->where('overview.0.months.6.month', 7)
-            ->where('overview.0.months.6.income', 1500)
-            ->where('overview.0.months.6.expense', 500)
-            ->where('overview.1.year', 2025)
-            ->where('overview.1.totals.income', 1200)
-            ->where('overview.1.totals.expense', 0)
+            ->where('tabs.0.overview.0.months.6.month', 7)
+            ->where('tabs.0.overview.0.months.6.income', 1500)
+            ->where('tabs.0.overview.0.months.6.expense', 500)
+            ->where('tabs.0.overview.1.year', 2025)
+            ->where('tabs.0.overview.1.totals.income', 1200)
+            ->where('tabs.0.overview.1.totals.expense', 0)
         );
     }
 
@@ -81,9 +85,86 @@ class OverviewTest extends TestCase
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->has('overview', 1)
-            ->where('overview.0.totals.income', 0)
-            ->where('overview.0.totals.expense', 0)
+            ->has('tabs', 1)
+            ->where('tabs.0.overview.0.totals.income', 0)
+            ->where('tabs.0.overview.0.totals.expense', 0)
+        );
+    }
+
+    public function test_it_adds_one_tab_per_card_scoped_to_that_cards_own_transactions()
+    {
+        $user = User::factory()->create();
+        $account = FinancialAccount::factory()->for($user)->create();
+        $cardOne = Card::factory()->for($account, 'financialAccount')->create(['name' => 'Carta Uno']);
+        $cardTwo = Card::factory()->for($account, 'financialAccount')->create(['name' => 'Carta Due']);
+
+        Transaction::factory()->for($account, 'financialAccount')->create([
+            'card_id' => $cardOne->id,
+            'transaction_date' => '2026-07-05',
+            'direction' => 'income',
+            'amount' => 100,
+        ]);
+        Transaction::factory()->for($account, 'financialAccount')->create([
+            'card_id' => $cardTwo->id,
+            'transaction_date' => '2026-07-06',
+            'direction' => 'expense',
+            'amount' => 40,
+        ]);
+
+        $response = $this->actingAs($user)->get(route('overview.index'));
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->has('tabs', 3)
+            ->where('tabs.0.id', 'all')
+            ->where('tabs.0.overview.0.totals.income', 100)
+            ->where('tabs.0.overview.0.totals.expense', 40)
+            ->where('tabs.1.name', 'Carta Due')
+            ->where('tabs.1.overview.0.totals.income', 0)
+            ->where('tabs.1.overview.0.totals.expense', 40)
+            ->where('tabs.2.name', 'Carta Uno')
+            ->where('tabs.2.overview.0.totals.income', 100)
+            ->where('tabs.2.overview.0.totals.expense', 0)
+        );
+    }
+
+    public function test_it_breaks_down_yearly_expenses_by_category()
+    {
+        $user = User::factory()->create();
+        $account = FinancialAccount::factory()->for($user)->create();
+        $groceries = TransactionCategory::factory()->create(['user_id' => null, 'name' => 'Alimentari', 'color' => '#123456']);
+
+        Transaction::factory()->for($account, 'financialAccount')->create([
+            'transaction_category_id' => $groceries->id,
+            'transaction_date' => '2026-02-01',
+            'direction' => 'expense',
+            'amount' => 300,
+        ]);
+        Transaction::factory()->for($account, 'financialAccount')->create([
+            'transaction_category_id' => null,
+            'transaction_date' => '2026-05-01',
+            'direction' => 'expense',
+            'amount' => 50,
+        ]);
+        // Income must not count as a category expense.
+        Transaction::factory()->for($account, 'financialAccount')->create([
+            'transaction_category_id' => $groceries->id,
+            'transaction_date' => '2026-06-01',
+            'direction' => 'income',
+            'amount' => 1000,
+        ]);
+
+        $response = $this->actingAs($user)->get(route('overview.index'));
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->has('tabs.0.overview.0.categoryBreakdown', 2)
+            ->where('tabs.0.overview.0.categoryBreakdown.0.name', 'Alimentari')
+            ->where('tabs.0.overview.0.categoryBreakdown.0.color', '#123456')
+            ->where('tabs.0.overview.0.categoryBreakdown.0.amount', 300)
+            ->where('tabs.0.overview.0.categoryBreakdown.1.name', 'Non categorizzato')
+            ->where('tabs.0.overview.0.categoryBreakdown.1.category_id', null)
+            ->where('tabs.0.overview.0.categoryBreakdown.1.amount', 50)
         );
     }
 }

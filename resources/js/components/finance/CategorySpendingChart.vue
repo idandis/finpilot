@@ -2,10 +2,16 @@
 import { computed, ref } from 'vue';
 import type { CategoryBreakdownItem } from '@/types';
 
-const props = defineProps<{
-    breakdown: CategoryBreakdownItem[];
-    currency: string;
-}>();
+const props = withDefaults(
+    defineProps<{
+        breakdown: CategoryBreakdownItem[];
+        currency: string;
+        emptyMessage?: string;
+    }>(),
+    {
+        emptyMessage: 'Nessuna spesa da mostrare per questo mese.',
+    },
+);
 
 const UNCATEGORIZED_COLOR = '#71717a';
 const RADIUS = 70;
@@ -55,7 +61,7 @@ function formatCurrency(value: number) {
 
 <template>
     <div v-if="breakdown.length === 0" class="text-sm text-muted-foreground">
-        Nessuna spesa da mostrare per questo mese.
+        {{ emptyMessage }}
     </div>
 
     <div v-else class="flex flex-col gap-6 sm:flex-row sm:items-center">

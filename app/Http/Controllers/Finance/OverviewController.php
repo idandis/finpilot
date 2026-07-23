@@ -3,47 +3,72 @@
 namespace App\Http\Controllers\Finance;
 
 use App\Http\Controllers\Controller;
+use App\Models\Card;
 use App\Models\Transaction;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection as SupportCollection;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class OverviewController extends Controller
 {
     /**
-     * Show income/expense totals for every month, grouped by year, across
-     * all of the user's financial accounts.
+     * Show income/expense totals for every month, grouped by year, once
+     * across all of the user's cards and once per individual card - a
+     * transaction only counts towards a card's tab if it was imported
+     * against that specific card.
      */
     public function index(Request $request): Response
     {
+        $cards = Card::query()
+            ->whereRelation('financialAccount', 'user_id', $request->user()->id)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
         $accountIds = $request->user()->financialAccounts()->pluck('id');
 
         $transactions = Transaction::query()
             ->whereIn('financial_account_id', $accountIds)
-            ->get(['transaction_date', 'amount', 'direction']);
+            ->with('category')
+            ->get(['id', 'transaction_date', 'amount', 'direction', 'card_id', 'transaction_category_id']);
 
-        $byYear = [];
-        foreach ($transactions as $transaction) {
-            $year = (int) $transaction->transaction_date->format('Y');
-            $month = (int) $transaction->transaction_date->format('n');
-            $amount = (float) $transaction->amount;
+        $tabs = collect([[
+            'id' => 'all',
+            'name' => 'Tutte le carte',
+            'overview' => $this->buildOverview($transactions),
+        ]])->concat($cards->map(fn (Card $card) => [
+            'id' => (string) $card->id,
+            'name' => $card->name,
+            'overview' => $this->buildOverview($transactions->where('card_id', $card->id)),
+        ]));
 
-            $byYear[$year][$month]['income'] = ($byYear[$year][$month]['income'] ?? 0)
-                + ($transaction->direction === 'income' ? $amount : 0);
-            $byYear[$year][$month]['expense'] = ($byYear[$year][$month]['expense'] ?? 0)
-                + ($transaction->direction === 'expense' ? $amount : 0);
-        }
+        return Inertia::render('finance/Overview/Index', [
+            'tabs' => $tabs->values(),
+        ]);
+    }
 
-        $years = empty($byYear) ? [now()->year] : collect(array_keys($byYear))->sortDesc()->values()->all();
+    /**
+     * @param  Collection<int, Transaction>  $transactions
+     * @return array<int, array{year: int, months: SupportCollection<int, array{month: int, income: float, expense: float}>, totals: array{income: float, expense: float}, categoryBreakdown: array<int, array{category_id: int|null, name: string, color: string|null, amount: float}>}>
+     */
+    private function buildOverview(Collection $transactions): array
+    {
+        $byYear = $transactions->groupBy(fn (Transaction $transaction) => (int) $transaction->transaction_date->format('Y'));
 
-        $overview = collect($years)->map(function (int $year) use ($byYear) {
-            $months = collect(range(1, 12))->map(function (int $month) use ($byYear, $year) {
-                $data = $byYear[$year][$month] ?? ['income' => 0, 'expense' => 0];
+        $years = $byYear->isEmpty() ? [now()->year] : $byYear->keys()->sortDesc()->values()->all();
+
+        return collect($years)->map(function (int $year) use ($byYear) {
+            $yearTransactions = $byYear->get($year, collect());
+            $byMonth = $yearTransactions->groupBy(fn (Transaction $transaction) => (int) $transaction->transaction_date->format('n'));
+
+            $months = collect(range(1, 12))->map(function (int $month) use ($byMonth) {
+                $monthTransactions = $byMonth->get($month, collect());
 
                 return [
                     'month' => $month,
-                    'income' => round($data['income'], 2),
-                    'expense' => round($data['expense'], 2),
+                    'income' => round((float) $monthTransactions->where('direction', 'income')->sum('amount'), 2),
+                    'expense' => round((float) $monthTransactions->where('direction', 'expense')->sum('amount'), 2),
                 ];
             })->values();
 
@@ -54,11 +79,36 @@ class OverviewController extends Controller
                     'income' => round($months->sum('income'), 2),
                     'expense' => round($months->sum('expense'), 2),
                 ],
+                'categoryBreakdown' => $this->categoryBreakdown($yearTransactions),
             ];
-        })->values();
+        })->values()->all();
+    }
 
-        return Inertia::render('finance/Overview/Index', [
-            'overview' => $overview,
-        ]);
+    /**
+     * Each category keeps a fixed, validated color (see TransactionCategorySeeder),
+     * so a category's slice color never shifts depending on which other
+     * categories happen to have spending in a given period.
+     *
+     * @param  SupportCollection<int, Transaction>  $transactions
+     * @return array<int, array{category_id: int|null, name: string, color: string|null, amount: float}>
+     */
+    private function categoryBreakdown(SupportCollection $transactions): array
+    {
+        return $transactions
+            ->where('direction', 'expense')
+            ->groupBy(fn (Transaction $transaction) => $transaction->transaction_category_id ?? 'uncategorized')
+            ->map(function ($group, $key) {
+                $first = $group->first();
+
+                return [
+                    'category_id' => $key === 'uncategorized' ? null : (int) $key,
+                    'name' => $first->category->name ?? 'Non categorizzato',
+                    'color' => $first->category->color ?? null,
+                    'amount' => (float) $group->sum('amount'),
+                ];
+            })
+            ->sortByDesc('amount')
+            ->values()
+            ->all();
     }
 }

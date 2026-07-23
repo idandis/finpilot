@@ -1,9 +1,11 @@
 <?php
 
 use App\Http\Controllers\Finance\AccountController;
+use App\Http\Controllers\Finance\BudgetController;
 use App\Http\Controllers\Finance\CardController;
 use App\Http\Controllers\Finance\CategoryController;
 use App\Http\Controllers\Finance\CategoryRuleController;
+use App\Http\Controllers\Finance\InvestmentController;
 use App\Http\Controllers\Finance\OverviewController;
 use App\Http\Controllers\Finance\TransactionController;
 use App\Http\Controllers\Finance\TransactionImportController;
@@ -11,6 +13,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('overview', [OverviewController::class, 'index'])->name('overview.index');
+    Route::get('investments', [InvestmentController::class, 'index'])->name('investments.index');
 
     Route::get('financial-accounts', [AccountController::class, 'index'])->name('accounts.index');
     Route::get('financial-accounts/create', [AccountController::class, 'create'])->name('accounts.create');
@@ -38,4 +41,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('categories', [CategoryController::class, 'store'])->name('categories.store');
     Route::patch('categories/{category}', [CategoryController::class, 'update'])->name('categories.update');
     Route::delete('categories/{category}', [CategoryController::class, 'destroy'])->name('categories.destroy');
+
+    Route::get('budgets', [BudgetController::class, 'index'])->name('budgets.index');
+    Route::patch('budgets/{category}', [BudgetController::class, 'update'])->name('budgets.update');
 });

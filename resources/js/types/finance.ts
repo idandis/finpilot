@@ -85,4 +85,65 @@ export type YearlyOverview = {
         income: number;
         expense: number;
     };
+    categoryBreakdown: CategoryBreakdownItem[];
+};
+
+export type OverviewTab = {
+    id: string;
+    name: string;
+    overview: YearlyOverview[];
+};
+
+export type MonthlyInvestmentFlow = {
+    month: number;
+    versato: number;
+    rientrato: number;
+};
+
+export type YearlyInvestmentFlow = {
+    year: number;
+    months: MonthlyInvestmentFlow[];
+    totals: {
+        versato: number;
+        rientrato: number;
+    };
+};
+
+export type OpenInvestmentPosition = {
+    isin: string;
+    name: string;
+    quantity: number;
+    invested: number;
+    average_price: number;
+    opened_at: string;
+};
+
+export type ClosedInvestmentPosition = {
+    isin: string;
+    name: string;
+    invested: number;
+    received: number;
+    realized_gain: number;
+    opened_at: string;
+    closed_at: string;
+};
+
+export type InvestmentPositions = {
+    open: OpenInvestmentPosition[];
+    closed: ClosedInvestmentPosition[];
+};
+
+export type InvestmentTab = {
+    id: string;
+    name: string;
+    cashFlow: YearlyInvestmentFlow[];
+    positions: InvestmentPositions;
+};
+
+export type CategoryBudgetRow = {
+    category_id: number;
+    name: string;
+    color: string | null;
+    monthly_budget: number | null;
+    card_id: number | null;
 };

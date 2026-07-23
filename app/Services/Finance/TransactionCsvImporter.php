@@ -3,12 +3,9 @@
 namespace App\Services\Finance;
 
 use App\Models\FinancialAccount;
-use App\Models\Transaction;
 use App\Models\TransactionCategory;
 use Carbon\CarbonImmutable;
-use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use League\Csv\Reader;
 
@@ -44,7 +41,7 @@ class TransactionCsvImporter
     /** @var string[] */
     private const DATE_FORMATS = ['Y-m-d H:i:s', 'd/m/Y', 'd-m-Y', 'Y-m-d', 'd/m/y'];
 
-    public function __construct(private readonly TransactionCategorizer $categorizer) {}
+    public function __construct(private readonly TransactionRowPersister $persister) {}
 
     /**
      * Import every valid row of the given CSV file (bank statements often span
@@ -84,157 +81,60 @@ class TransactionCsvImporter
             ];
         }
 
-        $imported = 0;
-        $duplicates = 0;
         $skipped = 0;
-        $latestDate = null;
+        $rows = [];
 
-        // Counts how many times an identical (date+amount+description) signature has
-        // been seen so far in this file, since real statements can legitimately
-        // contain two distinct transactions that look identical (e.g. two top-ups
-        // of the same amount on the same day, with no other distinguishing data).
-        $occurrenceIndex = [];
+        foreach ($csv->getRecords() as $record) {
+            $rawDate = $record[$headerMap[$dateColumn]] ?? '';
+            $rawDescription = $record[$headerMap[$descriptionColumn]] ?? '';
+            $rawAmount = $record[$headerMap[$amountColumn]] ?? '';
+            $rawCategory = $categoryColumn ? ($record[$headerMap[$categoryColumn]] ?? '') : '';
 
-        DB::transaction(function () use (
-            $csv, $headerMap, $dateColumn, $descriptionColumn, $amountColumn, $categoryColumn, $statusColumn,
-            $account, $cardId, &$imported, &$duplicates, &$skipped, &$occurrenceIndex, &$latestDate,
-        ) {
-            foreach ($csv->getRecords() as $record) {
-                $rawDate = $record[$headerMap[$dateColumn]] ?? '';
-                $rawDescription = $record[$headerMap[$descriptionColumn]] ?? '';
-                $rawAmount = $record[$headerMap[$amountColumn]] ?? '';
-                $rawCategory = $categoryColumn ? ($record[$headerMap[$categoryColumn]] ?? '') : '';
+            if ($statusColumn && $this->isCancelledStatus($record[$headerMap[$statusColumn]] ?? '')) {
+                $skipped++;
 
-                if ($statusColumn && $this->isCancelledStatus($record[$headerMap[$statusColumn]] ?? '')) {
-                    $skipped++;
-
-                    continue;
-                }
-
-                if (trim($rawDate) === '' || trim($rawDescription) === '' || trim($rawAmount) === '') {
-                    $skipped++;
-
-                    continue;
-                }
-
-                $date = $this->parseDate($rawDate);
-                $amount = $this->parseAmount($rawAmount);
-
-                if (! $date || $amount === null) {
-                    $skipped++;
-
-                    continue;
-                }
-
-                if (! $latestDate || $date->greaterThan($latestDate)) {
-                    $latestDate = $date;
-                }
-
-                $direction = $amount < 0 ? 'expense' : 'income';
-                $absoluteAmount = abs($amount);
-                $description = trim($rawDescription);
-
-                $signature = self::buildSignature($account->id, $date, $direction, $absoluteAmount, $description);
-
-                // If this exact signature repeats within the file, each repetition is
-                // treated as its own occurrence: the Nth time we see it here is compared
-                // against the Nth time it was ever imported, so genuinely repeated
-                // transactions are kept while true re-imports are still recognised as
-                // duplicates.
-                $occurrence = $occurrenceIndex[$signature] ?? 0;
-                $occurrenceIndex[$signature] = $occurrence + 1;
-
-                $dedupHash = self::hashSignature($signature, $occurrence);
-
-                $exists = Transaction::query()
-                    ->where('financial_account_id', $account->id)
-                    ->where('dedup_hash', $dedupHash)
-                    ->exists();
-
-                if ($exists) {
-                    $duplicates++;
-
-                    continue;
-                }
-
-                $categoryId = null;
-                if (trim($rawCategory) !== '') {
-                    $categoryId = TransactionCategory::query()
-                        ->where(fn ($query) => $query->whereNull('user_id')->orWhere('user_id', $account->user_id))
-                        ->whereRaw('LOWER(name) = ?', [mb_strtolower(trim($rawCategory))])
-                        ->value('id');
-                }
-
-                if (! $categoryId) {
-                    $categoryId = $this->categorizer->categorize($description, $account->user_id);
-                }
-
-                try {
-                    Transaction::create([
-                        'financial_account_id' => $account->id,
-                        'card_id' => $cardId,
-                        'transaction_category_id' => $categoryId,
-                        'transaction_date' => $date,
-                        'description' => $description,
-                        'amount' => $absoluteAmount,
-                        'direction' => $direction,
-                        'dedup_hash' => $dedupHash,
-                    ]);
-
-                    $imported++;
-                } catch (UniqueConstraintViolationException) {
-                    // The (financial_account_id, dedup_hash) unique constraint is the final
-                    // safety net: if this exact row was inserted a moment ago by a concurrent
-                    // request (e.g. a double-clicked submit), treat it as a duplicate instead
-                    // of surfacing a database error.
-                    $duplicates++;
-                }
+                continue;
             }
-        });
+
+            if (trim($rawDate) === '' || trim($rawDescription) === '' || trim($rawAmount) === '') {
+                $skipped++;
+
+                continue;
+            }
+
+            $date = $this->parseDate($rawDate);
+            $amount = $this->parseAmount($rawAmount);
+
+            if (! $date || $amount === null) {
+                $skipped++;
+
+                continue;
+            }
+
+            $categoryId = null;
+            if (trim($rawCategory) !== '') {
+                $categoryId = TransactionCategory::query()
+                    ->where(fn ($query) => $query->whereNull('user_id')->orWhere('user_id', $account->user_id))
+                    ->whereRaw('LOWER(name) = ?', [mb_strtolower(trim($rawCategory))])
+                    ->value('id');
+            }
+
+            $rows[] = [
+                'date' => $date,
+                'description' => trim($rawDescription),
+                'amount' => abs($amount),
+                'direction' => $amount < 0 ? 'expense' : 'income',
+                'category_id' => $categoryId,
+            ];
+        }
+
+        $result = $this->persister->persist($account, $cardId, $rows);
 
         return [
-            'imported' => $imported,
-            'duplicates' => $duplicates,
+            ...$result,
             'skipped' => $skipped,
             'error' => null,
-            'latest_year' => $latestDate ? (int) $latestDate->format('Y') : null,
-            'latest_month' => $latestDate ? (int) $latestDate->format('n') : null,
         ];
-    }
-
-    /**
-     * Build the identity signature for a transaction: account, calendar day
-     * (the `transaction_date` column is a DATE with no time, so hashing a
-     * parsed time-of-day here would make the hash impossible to reproduce
-     * later from the stored row - e.g. from `finance:dedupe-transactions`),
-     * direction, amount and description.
-     *
-     * Two distinct transactions can share all of this (e.g. two top-ups of
-     * the same amount on the same day) - that's what the occurrence index
-     * in `import()` and in `finance:dedupe-transactions` is for; it doesn't
-     * need time-of-day to tell them apart.
-     *
-     * Shared with `finance:dedupe-transactions`, which recomputes dedup
-     * hashes for already-imported rows using this exact same formula.
-     */
-    public static function buildSignature(int $accountId, \DateTimeInterface $date, string $direction, float $absoluteAmount, string $description): string
-    {
-        return implode('|', [
-            $accountId,
-            $date->format('Y-m-d'),
-            $direction,
-            number_format($absoluteAmount, 2, '.', ''),
-            mb_strtolower(trim($description)),
-        ]);
-    }
-
-    /**
-     * Turn a signature plus its occurrence index (0, 1, 2... for repeated
-     * identical-looking rows) into the stored dedup_hash.
-     */
-    public static function hashSignature(string $signature, int $occurrence): string
-    {
-        return hash('sha256', $signature.'|'.$occurrence);
     }
 
     private function detectDelimiter(string $path): string
