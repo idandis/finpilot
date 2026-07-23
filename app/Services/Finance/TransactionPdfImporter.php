@@ -2,7 +2,7 @@
 
 namespace App\Services\Finance;
 
-use App\Models\FinancialAccount;
+use App\Models\Card;
 use App\Models\TransactionCategory;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\UploadedFile;
@@ -52,7 +52,7 @@ class TransactionPdfImporter
      *
      * @return array{imported: int, duplicates: int, skipped: int, error: string|null, latest_year: int|null, latest_month: int|null}
      */
-    public function import(FinancialAccount $account, UploadedFile $file, ?int $cardId = null): array
+    public function import(Card $card, UploadedFile $file): array
     {
         $text = (new Parser)->parseFile($file->getRealPath())->getText();
 
@@ -129,7 +129,7 @@ class TransactionPdfImporter
             ];
         }
 
-        $result = $this->persister->persist($account, $cardId, $rows);
+        $result = $this->persister->persist($card, $rows);
 
         return [
             ...$result,

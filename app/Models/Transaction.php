@@ -11,7 +11,7 @@ use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
- * @property int $financial_account_id
+ * @property int|null $financial_account_id
  * @property int|null $card_id
  * @property int|null $transaction_category_id
  * @property Carbon $transaction_date

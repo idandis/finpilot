@@ -23,10 +23,17 @@ defineOptions({
     <div class="flex flex-col space-y-6 p-4">
         <Heading
             title="Panoramica"
-            description="Entrate e uscite mese per mese, su tutti i tuoi conti o per singola carta"
+            description="Entrate e uscite mese per mese, per singola carta"
         />
 
-        <Tabs :default-value="props.tabs[0].id">
+        <div
+            v-if="tabs.length === 0"
+            class="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground"
+        >
+            Nessuna carta trovata. Crea una carta per vedere la panoramica.
+        </div>
+
+        <Tabs v-else :default-value="props.tabs[0].id">
             <TabsList>
                 <TabsTrigger
                     v-for="tab in props.tabs"

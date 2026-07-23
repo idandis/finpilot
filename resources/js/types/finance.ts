@@ -5,16 +5,21 @@ export type CardType = 'debit' | 'credit' | 'prepaid';
 
 export type Card = {
     id: number;
-    financial_account_id: number;
+    user_id: number;
+    financial_account_id: number | null;
     name: string;
     type: CardType;
     last_four_digits: string | null;
     circuit: string | null;
+    color: string | null;
+    icon: string | null;
+    owner_name: string | null;
+    iban: string | null;
     is_active: boolean;
     financial_account?: Pick<
         FinancialAccount,
         'id' | 'name' | 'bank_name' | 'color' | 'currency'
-    >;
+    > | null;
 };
 
 export type FinancialAccount = {
@@ -44,7 +49,7 @@ export type TransactionDirection = 'income' | 'expense';
 
 export type Transaction = {
     id: number;
-    financial_account_id: number;
+    financial_account_id: number | null;
     card_id: number | null;
     transaction_category_id: number | null;
     transaction_date: string;

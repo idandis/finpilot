@@ -31,14 +31,12 @@ class InvestmentController extends Controller
             ->pluck('id');
 
         $cards = Card::query()
-            ->whereRelation('financialAccount', 'user_id', $request->user()->id)
+            ->where('user_id', $request->user()->id)
             ->orderBy('name')
             ->get(['id', 'name']);
 
-        $accountIds = $request->user()->financialAccounts()->pluck('id');
-
         $transactions = Transaction::query()
-            ->whereIn('financial_account_id', $accountIds)
+            ->whereIn('card_id', $cards->pluck('id'))
             ->whereIn('transaction_category_id', $investmentCategoryIds)
             ->get(['transaction_date', 'amount', 'direction', 'card_id', 'isin', 'quantity', 'description']);
 

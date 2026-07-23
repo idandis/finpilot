@@ -12,7 +12,7 @@ class TransactionImportRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return $this->route('card')->financialAccount->user_id === $this->user()->id;
+        return $this->route('card')->user_id === $this->user()->id;
     }
 
     /**

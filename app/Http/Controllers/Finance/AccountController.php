@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Finance;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Finance\AccountStoreRequest;
 use App\Http\Requests\Finance\AccountUpdateRequest;
-use App\Models\Card;
 use App\Models\FinancialAccount;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -61,7 +60,6 @@ class AccountController extends Controller
         return Inertia::render('finance/Accounts/Edit', [
             'account' => $account->load('cards'),
             'accountTypes' => FinancialAccount::TYPES,
-            'cardTypes' => Card::TYPES,
         ]);
     }
 

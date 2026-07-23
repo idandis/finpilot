@@ -33,7 +33,7 @@ class TransactionPdfImportTest extends TestCase
     {
         $user = User::factory()->create();
         $account = FinancialAccount::factory()->for($user)->create();
-        $card = Card::factory()->for($account, 'financialAccount')->create();
+        $card = Card::factory()->for($account, 'financialAccount')->create(['user_id' => $user->id]);
         TransactionCategory::factory()->create(['user_id' => null, 'name' => 'Investimenti']);
 
         $response = $this->actingAs($user)->post(route('transactions.import', $card), [
@@ -67,7 +67,7 @@ class TransactionPdfImportTest extends TestCase
     {
         $user = User::factory()->create();
         $account = FinancialAccount::factory()->for($user)->create();
-        $card = Card::factory()->for($account, 'financialAccount')->create();
+        $card = Card::factory()->for($account, 'financialAccount')->create(['user_id' => $user->id]);
 
         $this->actingAs($user)->post(route('transactions.import', $card), [
             'file' => $this->statementFile(),
@@ -86,7 +86,7 @@ class TransactionPdfImportTest extends TestCase
     {
         $user = User::factory()->create();
         $account = FinancialAccount::factory()->for($user)->create();
-        $card = Card::factory()->for($account, 'financialAccount')->create();
+        $card = Card::factory()->for($account, 'financialAccount')->create(['user_id' => $user->id]);
 
         $file = UploadedFile::fake()->createWithContent(
             'documento.pdf',

@@ -33,7 +33,7 @@ class BudgetUpdateRequest extends FormRequest
                 'sometimes',
                 'nullable',
                 Rule::exists('cards', 'id')->where(
-                    fn ($query) => $query->whereIn('financial_account_id', $this->user()->financialAccounts()->pluck('id'))
+                    fn ($query) => $query->where('user_id', $this->user()->id)
                 ),
             ],
         ];

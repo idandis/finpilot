@@ -3,7 +3,6 @@ import { Head, Link } from '@inertiajs/vue3';
 import BankCard from '@/components/finance/BankCard.vue';
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
-import * as accountRoutes from '@/routes/accounts';
 import * as cardRoutes from '@/routes/cards';
 import type { Card } from '@/types';
 
@@ -22,22 +21,21 @@ defineProps<{
     <Head title="Carte" />
 
     <div class="flex flex-col space-y-6 p-4">
-        <Heading
-            title="Le tue carte"
-            description="Tutte le carte associate ai tuoi conti"
-        />
+        <div class="flex items-center justify-between">
+            <Heading
+                title="Le tue carte"
+                description="Tutte le tue carte, collegate o meno a un conto"
+            />
+            <Button as-child>
+                <Link :href="cardRoutes.create()">Crea una carta</Link>
+            </Button>
+        </div>
 
         <div
             v-if="cards.length === 0"
             class="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground"
         >
-            Non hai ancora nessuna carta. Aggiungine una dalla pagina di
-            modifica di un conto.
-            <div class="mt-4">
-                <Button as-child variant="outline">
-                    <Link :href="accountRoutes.index()">Vai ai conti</Link>
-                </Button>
-            </div>
+            Non hai ancora nessuna carta.
         </div>
 
         <div

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { CreditCard, Wifi } from '@lucide/vue';
 import { computed } from 'vue';
+import { CARD_ICONS } from '@/lib/card-icons';
+import type { CardIconName } from '@/lib/card-icons';
 import type { Card } from '@/types';
 
 const props = defineProps<{
@@ -18,13 +20,21 @@ function shade(hex: string, percent: number) {
 }
 
 const baseColor = computed(
-    () => props.card.financial_account?.color || '#1e293b',
+    () => props.card.color || props.card.financial_account?.color || '#1e293b',
 );
 
 const gradient = computed(
     () =>
         `linear-gradient(135deg, ${baseColor.value} 0%, ${shade(baseColor.value, -35)} 100%)`,
 );
+
+const iconComponent = computed(() => {
+    if (!props.card.icon) {
+        return null;
+    }
+
+    return CARD_ICONS[props.card.icon as CardIconName] ?? null;
+});
 </script>
 
 <template>
@@ -57,8 +67,9 @@ const gradient = computed(
             <div
                 class="flex shrink-0 items-center gap-1 text-sm font-bold tracking-wide uppercase italic"
             >
-                <CreditCard v-if="!card.circuit" class="size-4" />
-                <span v-else>{{ card.circuit }}</span>
+                <span v-if="card.circuit">{{ card.circuit }}</span>
+                <component :is="iconComponent" v-else-if="iconComponent" class="size-4" />
+                <CreditCard v-else class="size-4" />
             </div>
         </div>
 

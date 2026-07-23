@@ -7,9 +7,11 @@ const props = withDefaults(
         breakdown: CategoryBreakdownItem[];
         currency: string;
         emptyMessage?: string;
+        centerLabel?: string;
     }>(),
     {
         emptyMessage: 'Nessuna spesa da mostrare per questo mese.',
+        centerLabel: 'Uscite',
     },
 );
 
@@ -64,8 +66,8 @@ function formatCurrency(value: number) {
         {{ emptyMessage }}
     </div>
 
-    <div v-else class="flex flex-col gap-6 sm:flex-row sm:items-center">
-        <div class="relative mx-auto size-48 shrink-0">
+    <div v-else class="flex flex-col gap-6 @lg:flex-row @lg:items-center">
+        <div class="relative mx-auto aspect-square w-40 shrink-0 @lg:w-48">
             <svg viewBox="0 0 200 200" class="size-full -rotate-90">
                 <circle
                     v-for="segment in segments"
@@ -100,14 +102,16 @@ function formatCurrency(value: number) {
             <div
                 class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"
             >
-                <span class="text-xs text-muted-foreground">Uscite</span>
+                <span class="text-xs text-muted-foreground">{{
+                    centerLabel
+                }}</span>
                 <span class="text-lg font-semibold">{{
                     formatCurrency(total)
                 }}</span>
             </div>
         </div>
 
-        <ul class="flex-1 space-y-1.5">
+        <ul class="min-w-0 flex-1 space-y-1.5">
             <li
                 v-for="segment in segments"
                 :key="keyFor(segment)"

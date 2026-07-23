@@ -18,30 +18,34 @@ class CategoryBreakdownTest extends TestCase
     {
         $user = User::factory()->create();
         $account = FinancialAccount::factory()->for($user)->create();
-        $card = Card::factory()->for($account, 'financialAccount')->create();
+        $card = Card::factory()->for($account, 'financialAccount')->create(['user_id' => $user->id]);
 
         $groceries = TransactionCategory::factory()->create(['user_id' => null, 'name' => 'Alimentari', 'color' => '#008300']);
         $transport = TransactionCategory::factory()->create(['user_id' => null, 'name' => 'Trasporti', 'color' => '#c98500']);
 
         Transaction::factory()->for($account, 'financialAccount')->create([
+            'card_id' => $card->id,
             'transaction_date' => '2026-07-05',
             'direction' => 'expense',
             'amount' => 60,
             'transaction_category_id' => $groceries->id,
         ]);
         Transaction::factory()->for($account, 'financialAccount')->create([
+            'card_id' => $card->id,
             'transaction_date' => '2026-07-10',
             'direction' => 'expense',
             'amount' => 40,
             'transaction_category_id' => $groceries->id,
         ]);
         Transaction::factory()->for($account, 'financialAccount')->create([
+            'card_id' => $card->id,
             'transaction_date' => '2026-07-12',
             'direction' => 'expense',
             'amount' => 30,
             'transaction_category_id' => $transport->id,
         ]);
         Transaction::factory()->for($account, 'financialAccount')->create([
+            'card_id' => $card->id,
             'transaction_date' => '2026-07-15',
             'direction' => 'expense',
             'amount' => 15,
@@ -49,6 +53,7 @@ class CategoryBreakdownTest extends TestCase
         ]);
         // Income must not appear in the expense breakdown.
         Transaction::factory()->for($account, 'financialAccount')->create([
+            'card_id' => $card->id,
             'transaction_date' => '2026-07-01',
             'direction' => 'income',
             'amount' => 1500,
@@ -56,6 +61,7 @@ class CategoryBreakdownTest extends TestCase
         ]);
         // Outside the selected month: must not be included.
         Transaction::factory()->for($account, 'financialAccount')->create([
+            'card_id' => $card->id,
             'transaction_date' => '2026-06-01',
             'direction' => 'expense',
             'amount' => 999,
@@ -82,11 +88,64 @@ class CategoryBreakdownTest extends TestCase
     {
         $user = User::factory()->create();
         $account = FinancialAccount::factory()->for($user)->create();
-        $card = Card::factory()->for($account, 'financialAccount')->create();
+        $card = Card::factory()->for($account, 'financialAccount')->create(['user_id' => $user->id]);
 
         $response = $this->actingAs($user)->get(route('cards.show', ['card' => $card, 'year' => 2026, 'month' => 7]));
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page->has('categoryBreakdown', 0));
+    }
+
+    public function test_it_returns_a_category_breakdown_of_income_for_the_selected_month()
+    {
+        $user = User::factory()->create();
+        $account = FinancialAccount::factory()->for($user)->create();
+        $card = Card::factory()->for($account, 'financialAccount')->create(['user_id' => $user->id]);
+
+        $salary = TransactionCategory::factory()->create(['user_id' => null, 'name' => 'Stipendio', 'color' => '#0044aa']);
+        $refunds = TransactionCategory::factory()->create(['user_id' => null, 'name' => 'Rimborsi', 'color' => '#aa4400']);
+
+        Transaction::factory()->for($account, 'financialAccount')->create([
+            'card_id' => $card->id,
+            'transaction_date' => '2026-07-01',
+            'direction' => 'income',
+            'amount' => 1500,
+            'transaction_category_id' => $salary->id,
+        ]);
+        Transaction::factory()->for($account, 'financialAccount')->create([
+            'card_id' => $card->id,
+            'transaction_date' => '2026-07-08',
+            'direction' => 'income',
+            'amount' => 50,
+            'transaction_category_id' => $refunds->id,
+        ]);
+        // Expenses must not appear in the income breakdown.
+        Transaction::factory()->for($account, 'financialAccount')->create([
+            'card_id' => $card->id,
+            'transaction_date' => '2026-07-10',
+            'direction' => 'expense',
+            'amount' => 40,
+            'transaction_category_id' => $salary->id,
+        ]);
+        // Outside the selected month: must not be included.
+        Transaction::factory()->for($account, 'financialAccount')->create([
+            'card_id' => $card->id,
+            'transaction_date' => '2026-06-01',
+            'direction' => 'income',
+            'amount' => 999,
+            'transaction_category_id' => $salary->id,
+        ]);
+
+        $response = $this->actingAs($user)->get(route('cards.show', ['card' => $card, 'year' => 2026, 'month' => 7]));
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->has('incomeCategoryBreakdown', 2)
+            ->where('incomeCategoryBreakdown.0.name', 'Stipendio')
+            ->where('incomeCategoryBreakdown.0.amount', 1500)
+            ->where('incomeCategoryBreakdown.0.color', '#0044aa')
+            ->where('incomeCategoryBreakdown.1.name', 'Rimborsi')
+            ->where('incomeCategoryBreakdown.1.amount', 50)
+        );
     }
 }

@@ -44,13 +44,12 @@ class BudgetController extends Controller
         })->values();
 
         $cards = Card::query()
-            ->whereRelation('financialAccount', 'user_id', $request->user()->id)
+            ->where('user_id', $request->user()->id)
             ->orderBy('name')
             ->get(['id', 'name']);
 
         return Inertia::render('finance/Budgets/Index', [
             'budgets' => $rows,
-            'totalBudget' => (float) $rows->sum('monthly_budget'),
             'cards' => $cards,
         ]);
     }

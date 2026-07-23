@@ -23,8 +23,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('financial-accounts/{account}', [AccountController::class, 'destroy'])->name('accounts.destroy');
 
     Route::get('cards', [CardController::class, 'index'])->name('cards.index');
+    Route::get('cards/create', [CardController::class, 'create'])->name('cards.create');
+    Route::get('cards/{card}/edit', [CardController::class, 'edit'])->name('cards.edit');
     Route::get('cards/{card}', [CardController::class, 'show'])->name('cards.show');
-    Route::post('financial-accounts/{account}/cards', [CardController::class, 'store'])->name('cards.store');
+    Route::post('cards', [CardController::class, 'store'])->name('cards.store');
     Route::put('cards/{card}', [CardController::class, 'update'])->name('cards.update');
     Route::delete('cards/{card}', [CardController::class, 'destroy'])->name('cards.destroy');
 
@@ -32,6 +34,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('transactions/{transaction}', [TransactionController::class, 'update'])->name('transactions.update');
     Route::delete('transactions/{transaction}', [TransactionController::class, 'destroy'])->name('transactions.destroy');
     Route::delete('financial-accounts/{account}/transactions', [TransactionController::class, 'destroyAllForAccount'])->name('accounts.transactions.destroy');
+    Route::delete('cards/{card}/transactions', [TransactionController::class, 'destroyAllForCard'])->name('cards.transactions.destroy');
 
     Route::get('category-rules', [CategoryRuleController::class, 'index'])->name('category-rules.index');
     Route::patch('category-rules/{rule}', [CategoryRuleController::class, 'update'])->name('category-rules.update');

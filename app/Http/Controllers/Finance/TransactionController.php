@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Finance;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Finance\TransactionUpdateRequest;
+use App\Models\Card;
 use App\Models\FinancialAccount;
 use App\Models\Transaction;
 use App\Services\Finance\TransactionCategorizer;
@@ -38,7 +39,9 @@ class TransactionController extends Controller
      */
     public function destroy(Request $request, Transaction $transaction): RedirectResponse
     {
-        abort_unless($transaction->financialAccount->user_id === $request->user()->id, 403);
+        $ownerId = $transaction->card?->user_id ?? $transaction->financialAccount?->user_id;
+
+        abort_unless($ownerId === $request->user()->id, 403);
 
         $transaction->delete();
 
@@ -58,6 +61,26 @@ class TransactionController extends Controller
 
         $count = $account->transactions()->count();
         $account->transactions()->delete();
+
+        Inertia::flash('toast', [
+            'type' => 'success',
+            'message' => "{$count} transazioni eliminate. Puoi reimportare l'estratto conto.",
+        ]);
+
+        return back();
+    }
+
+    /**
+     * Delete every transaction belonging to a card - the clean way to
+     * recover from a bad or duplicated import: wipe the card's transactions
+     * and re-import the statement fresh.
+     */
+    public function destroyAllForCard(Request $request, Card $card): RedirectResponse
+    {
+        abort_unless($card->user_id === $request->user()->id, 403);
+
+        $count = $card->transactions()->count();
+        $card->transactions()->delete();
 
         Inertia::flash('toast', [
             'type' => 'success',

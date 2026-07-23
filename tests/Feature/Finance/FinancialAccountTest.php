@@ -136,49 +136,15 @@ class FinancialAccountTest extends TestCase
         $this->assertDatabaseHas('financial_accounts', ['id' => $account->id]);
     }
 
-    public function test_a_user_can_add_a_card_to_their_account()
-    {
-        $user = User::factory()->create();
-        $account = FinancialAccount::factory()->for($user)->create();
-
-        $response = $this->actingAs($user)->post(route('cards.store', $account), [
-            'name' => 'Carta Visa Oro',
-            'type' => 'debit',
-            'last_four_digits' => '1234',
-            'circuit' => 'Visa',
-        ]);
-
-        $response->assertRedirect(route('accounts.edit', $account));
-        $this->assertDatabaseHas('cards', [
-            'financial_account_id' => $account->id,
-            'name' => 'Carta Visa Oro',
-            'last_four_digits' => '1234',
-        ]);
-    }
-
-    public function test_a_user_cannot_add_a_card_to_another_users_account()
-    {
-        $user = User::factory()->create();
-        $otherUser = User::factory()->create();
-        $account = FinancialAccount::factory()->for($otherUser)->create();
-
-        $response = $this->actingAs($user)->post(route('cards.store', $account), [
-            'name' => 'Carta Visa Oro',
-            'type' => 'debit',
-        ]);
-
-        $response->assertForbidden();
-    }
-
     public function test_a_user_can_delete_a_card_from_their_account()
     {
         $user = User::factory()->create();
         $account = FinancialAccount::factory()->for($user)->create();
-        $card = Card::factory()->for($account, 'financialAccount')->create();
+        $card = Card::factory()->for($account, 'financialAccount')->create(['user_id' => $user->id]);
 
         $response = $this->actingAs($user)->delete(route('cards.destroy', $card));
 
-        $response->assertRedirect(route('accounts.edit', $account));
+        $response->assertRedirect(route('cards.index'));
         $this->assertDatabaseMissing('cards', ['id' => $card->id]);
     }
 
@@ -187,7 +153,7 @@ class FinancialAccountTest extends TestCase
         $user = User::factory()->create();
         $otherUser = User::factory()->create();
         $account = FinancialAccount::factory()->for($otherUser)->create();
-        $card = Card::factory()->for($account, 'financialAccount')->create();
+        $card = Card::factory()->for($account, 'financialAccount')->create(['user_id' => $otherUser->id]);
 
         $response = $this->actingAs($user)->delete(route('cards.destroy', $card));
 

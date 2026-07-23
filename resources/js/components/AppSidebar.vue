@@ -10,7 +10,6 @@ import {
     Tag,
     Tags,
     TrendingUp,
-    Wallet,
 } from '@lucide/vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
@@ -26,7 +25,6 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
-import * as accounts from '@/routes/accounts';
 import * as budgets from '@/routes/budgets';
 import * as cards from '@/routes/cards';
 import * as categories from '@/routes/categories';
@@ -45,11 +43,6 @@ const mainNavItems: NavItem[] = [
         title: 'Panoramica',
         href: overview.index(),
         icon: CalendarRange,
-    },
-    {
-        title: 'Conti',
-        href: accounts.index(),
-        icon: Wallet,
     },
     {
         title: 'Carte',

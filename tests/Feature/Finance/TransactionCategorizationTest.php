@@ -69,7 +69,7 @@ class TransactionCategorizationTest extends TestCase
     {
         $user = User::factory()->create();
         $account = FinancialAccount::factory()->for($user)->create();
-        $card = Card::factory()->for($account, 'financialAccount')->create();
+        $card = Card::factory()->for($account, 'financialAccount')->create(['user_id' => $user->id]);
         $category = TransactionCategory::factory()->create(['user_id' => null, 'name' => 'Abbonamenti']);
 
         CategoryRule::factory()->create([

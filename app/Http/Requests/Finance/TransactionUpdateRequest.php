@@ -13,7 +13,10 @@ class TransactionUpdateRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return $this->route('transaction')->financialAccount->user_id === $this->user()->id;
+        $transaction = $this->route('transaction');
+        $ownerId = $transaction->card?->user_id ?? $transaction->financialAccount?->user_id;
+
+        return $ownerId === $this->user()->id;
     }
 
     /**

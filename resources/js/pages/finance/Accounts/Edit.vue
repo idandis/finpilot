@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { Form, Head, router } from '@inertiajs/vue3';
+import { Form, Head, Link, router } from '@inertiajs/vue3';
 import AccountController from '@/actions/App/Http/Controllers/Finance/AccountController';
-import CardController from '@/actions/App/Http/Controllers/Finance/CardController';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
 import { Badge } from '@/components/ui/badge';
@@ -11,12 +10,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import * as accounts from '@/routes/accounts';
 import * as cards from '@/routes/cards';
-import type { AccountType, CardType, FinancialAccount } from '@/types';
+import type { AccountType, FinancialAccount } from '@/types';
 
 defineProps<{
     account: FinancialAccount;
     accountTypes: AccountType[];
-    cardTypes: CardType[];
 }>();
 
 defineOptions({
@@ -212,71 +210,11 @@ function destroyCard(card: { id: number; name: string }) {
                 Nessuna carta associata a questo conto.
             </p>
 
-            <Form
-                v-bind="CardController.store.form(account.id)"
-                reset-on-success
-                class="space-y-4 rounded-lg border p-4"
-                v-slot="{ errors, processing }"
-            >
-                <p class="text-sm font-medium">Aggiungi una carta</p>
-
-                <div class="grid gap-2">
-                    <Label for="card_name">Nome</Label>
-                    <Input
-                        id="card_name"
-                        name="name"
-                        required
-                        placeholder="Es. Carta Visa"
-                    />
-                    <InputError :message="errors.name" />
-                </div>
-
-                <div class="grid gap-2">
-                    <Label for="card_type">Tipo</Label>
-                    <select
-                        id="card_type"
-                        name="type"
-                        required
-                        class="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                    >
-                        <option
-                            v-for="type in cardTypes"
-                            :key="type"
-                            :value="type"
-                        >
-                            {{ cardTypeLabels[type] ?? type }}
-                        </option>
-                    </select>
-                    <InputError :message="errors.type" />
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="grid gap-2">
-                        <Label for="last_four_digits">Ultime 4 cifre</Label>
-                        <Input
-                            id="last_four_digits"
-                            name="last_four_digits"
-                            maxlength="4"
-                            placeholder="1234"
-                        />
-                        <InputError :message="errors.last_four_digits" />
-                    </div>
-
-                    <div class="grid gap-2">
-                        <Label for="circuit">Circuito</Label>
-                        <Input
-                            id="circuit"
-                            name="circuit"
-                            placeholder="Visa, Mastercard..."
-                        />
-                        <InputError :message="errors.circuit" />
-                    </div>
-                </div>
-
-                <Button type="submit" variant="secondary" :disabled="processing"
-                    >Aggiungi carta</Button
-                >
-            </Form>
+            <Button as-child variant="outline" size="sm">
+                <Link :href="cards.create({ query: { account: account.id } })">
+                    Aggiungi una carta a questo conto
+                </Link>
+            </Button>
         </div>
     </div>
 </template>

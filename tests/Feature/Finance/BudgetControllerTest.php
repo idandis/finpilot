@@ -40,7 +40,6 @@ class BudgetControllerTest extends TestCase
             ->where('budgets.0.monthly_budget', 300)
             ->where('budgets.1.name', 'Trasporti')
             ->where('budgets.1.monthly_budget', null)
-            ->where('totalBudget', 300)
         );
     }
 
@@ -124,7 +123,7 @@ class BudgetControllerTest extends TestCase
     {
         $user = User::factory()->create();
         $account = FinancialAccount::factory()->create(['user_id' => $user->id]);
-        $card = Card::factory()->create(['financial_account_id' => $account->id]);
+        $card = Card::factory()->create(['financial_account_id' => $account->id, 'user_id' => $user->id]);
         $category = TransactionCategory::factory()->create(['user_id' => null]);
         CategoryBudget::factory()->create([
             'user_id' => $user->id,
@@ -149,8 +148,8 @@ class BudgetControllerTest extends TestCase
     {
         $user = User::factory()->create();
         $account = FinancialAccount::factory()->create(['user_id' => $user->id]);
-        $cardOne = Card::factory()->create(['financial_account_id' => $account->id]);
-        $cardTwo = Card::factory()->create(['financial_account_id' => $account->id]);
+        $cardOne = Card::factory()->create(['financial_account_id' => $account->id, 'user_id' => $user->id]);
+        $cardTwo = Card::factory()->create(['financial_account_id' => $account->id, 'user_id' => $user->id]);
         $category = TransactionCategory::factory()->create(['user_id' => null]);
         CategoryBudget::factory()->create([
             'user_id' => $user->id,
@@ -176,7 +175,7 @@ class BudgetControllerTest extends TestCase
     {
         $user = User::factory()->create();
         $account = FinancialAccount::factory()->create(['user_id' => $user->id]);
-        $card = Card::factory()->create(['financial_account_id' => $account->id]);
+        $card = Card::factory()->create(['financial_account_id' => $account->id, 'user_id' => $user->id]);
         $category = TransactionCategory::factory()->create(['user_id' => null]);
         CategoryBudget::factory()->create([
             'user_id' => $user->id,

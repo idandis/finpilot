@@ -24,11 +24,13 @@ class InvestmentControllerTest extends TestCase
     {
         $user = User::factory()->create();
         $account = FinancialAccount::factory()->for($user)->create();
+        $card = Card::factory()->for($account, 'financialAccount')->create(['user_id' => $user->id]);
         $investments = TransactionCategory::factory()->create(['user_id' => null, 'name' => 'Investimenti']);
         $groceries = TransactionCategory::factory()->create(['user_id' => null, 'name' => 'Alimentari']);
 
         // A buy trade: cash goes out.
         Transaction::factory()->for($account, 'financialAccount')->create([
+            'card_id' => $card->id,
             'transaction_category_id' => $investments->id,
             'transaction_date' => '2026-07-05',
             'direction' => 'expense',
@@ -36,6 +38,7 @@ class InvestmentControllerTest extends TestCase
         ]);
         // A sell trade: cash comes back.
         Transaction::factory()->for($account, 'financialAccount')->create([
+            'card_id' => $card->id,
             'transaction_category_id' => $investments->id,
             'transaction_date' => '2026-07-10',
             'direction' => 'income',
@@ -43,6 +46,7 @@ class InvestmentControllerTest extends TestCase
         ]);
         // An unrelated grocery expense must not count towards the investment flow.
         Transaction::factory()->for($account, 'financialAccount')->create([
+            'card_id' => $card->id,
             'transaction_category_id' => $groceries->id,
             'transaction_date' => '2026-07-12',
             'direction' => 'expense',
@@ -68,8 +72,8 @@ class InvestmentControllerTest extends TestCase
     {
         $user = User::factory()->create();
         $account = FinancialAccount::factory()->for($user)->create();
-        $cardOne = Card::factory()->for($account, 'financialAccount')->create(['name' => 'Trade Republic']);
-        $cardTwo = Card::factory()->for($account, 'financialAccount')->create(['name' => 'Altra carta']);
+        $cardOne = Card::factory()->for($account, 'financialAccount')->create(['user_id' => $user->id, 'name' => 'Trade Republic']);
+        $cardTwo = Card::factory()->for($account, 'financialAccount')->create(['user_id' => $user->id, 'name' => 'Altra carta']);
         $investments = TransactionCategory::factory()->create(['user_id' => null, 'name' => 'Investimenti']);
 
         Transaction::factory()->for($account, 'financialAccount')->create([
@@ -97,9 +101,11 @@ class InvestmentControllerTest extends TestCase
     {
         $user = User::factory()->create();
         $account = FinancialAccount::factory()->for($user)->create();
+        $card = Card::factory()->for($account, 'financialAccount')->create(['user_id' => $user->id]);
         $investments = TransactionCategory::factory()->create(['user_id' => null, 'name' => 'Investimenti']);
 
         Transaction::factory()->for($account, 'financialAccount')->create([
+            'card_id' => $card->id,
             'transaction_category_id' => $investments->id,
             'transaction_date' => '2026-07-05',
             'description' => 'Buy trade IE00BK5BQT80 Vanguard Funds PLC - Vanguard FTSE All-World UCITS ETF (USD) Accumulating, quantity: 2.0',
@@ -126,9 +132,11 @@ class InvestmentControllerTest extends TestCase
     {
         $user = User::factory()->create();
         $account = FinancialAccount::factory()->for($user)->create();
+        $card = Card::factory()->for($account, 'financialAccount')->create(['user_id' => $user->id]);
         $investments = TransactionCategory::factory()->create(['user_id' => null, 'name' => 'Investimenti']);
 
         Transaction::factory()->for($account, 'financialAccount')->create([
+            'card_id' => $card->id,
             'transaction_category_id' => $investments->id,
             'transaction_date' => '2026-07-05',
             'description' => 'Buy trade IT0005495657 SAIPEM, quantity: 91.0',
@@ -138,6 +146,7 @@ class InvestmentControllerTest extends TestCase
             'amount' => 200,
         ]);
         Transaction::factory()->for($account, 'financialAccount')->create([
+            'card_id' => $card->id,
             'transaction_category_id' => $investments->id,
             'transaction_date' => '2026-07-10',
             'description' => 'Sell trade IT0005495657 SAIPEM, quantity: 91.0',

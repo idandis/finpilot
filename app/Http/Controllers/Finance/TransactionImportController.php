@@ -13,10 +13,10 @@ use Inertia\Inertia;
 class TransactionImportController extends Controller
 {
     /**
-     * Import a statement into the given card's account, as CSV or as a
-     * Trade Republic PDF depending on the uploaded file. Statements often
-     * span more than one calendar month, so every valid row is imported;
-     * the user then lands on the month of the most recent transaction found.
+     * Import a statement into the given card, as CSV or as a Trade Republic
+     * PDF depending on the uploaded file. Statements often span more than
+     * one calendar month, so every valid row is imported; the user then
+     * lands on the month of the most recent transaction found.
      */
     public function store(
         TransactionImportRequest $request,
@@ -27,11 +27,7 @@ class TransactionImportController extends Controller
         $file = $request->file('file');
         $importer = $file->getClientOriginalExtension() === 'pdf' ? $pdfImporter : $csvImporter;
 
-        $result = $importer->import(
-            $card->financialAccount,
-            $file,
-            $card->id,
-        );
+        $result = $importer->import($card, $file);
 
         if ($result['error']) {
             Inertia::flash('toast', ['type' => 'error', 'message' => $result['error']]);

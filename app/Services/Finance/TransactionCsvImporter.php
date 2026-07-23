@@ -2,7 +2,7 @@
 
 namespace App\Services\Finance;
 
-use App\Models\FinancialAccount;
+use App\Models\Card;
 use App\Models\TransactionCategory;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\UploadedFile;
@@ -51,7 +51,7 @@ class TransactionCsvImporter
      *
      * @return array{imported: int, duplicates: int, skipped: int, error: string|null, latest_year: int|null, latest_month: int|null}
      */
-    public function import(FinancialAccount $account, UploadedFile $file, ?int $cardId = null): array
+    public function import(Card $card, UploadedFile $file): array
     {
         $csv = Reader::from($file->getRealPath());
         $csv->setDelimiter($this->detectDelimiter($file->getRealPath()));
@@ -114,7 +114,7 @@ class TransactionCsvImporter
             $categoryId = null;
             if (trim($rawCategory) !== '') {
                 $categoryId = TransactionCategory::query()
-                    ->where(fn ($query) => $query->whereNull('user_id')->orWhere('user_id', $account->user_id))
+                    ->where(fn ($query) => $query->whereNull('user_id')->orWhere('user_id', $card->user_id))
                     ->whereRaw('LOWER(name) = ?', [mb_strtolower(trim($rawCategory))])
                     ->value('id');
             }
@@ -128,7 +128,7 @@ class TransactionCsvImporter
             ];
         }
 
-        $result = $this->persister->persist($account, $cardId, $rows);
+        $result = $this->persister->persist($card, $rows);
 
         return [
             ...$result,

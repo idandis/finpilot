@@ -3,7 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\Card;
-use App\Models\FinancialAccount;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -19,11 +19,16 @@ class CardFactory extends Factory
     public function definition(): array
     {
         return [
-            'financial_account_id' => FinancialAccount::factory(),
+            'user_id' => User::factory(),
+            'financial_account_id' => null,
             'name' => fake()->words(2, true),
             'type' => fake()->randomElement(Card::TYPES),
             'last_four_digits' => fake()->numerify('####'),
             'circuit' => fake()->randomElement(['Visa', 'Mastercard', 'Amex']),
+            'color' => fake()->hexColor(),
+            'icon' => fake()->randomElement(Card::ICONS),
+            'owner_name' => fake()->name(),
+            'iban' => null,
             'is_active' => true,
         ];
     }

@@ -17,9 +17,8 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import * as accountRoutes from '@/routes/accounts';
-import * as accountTransactionRoutes from '@/routes/accounts/transactions';
 import * as cardRoutes from '@/routes/cards';
+import * as cardTransactionRoutes from '@/routes/cards/transactions';
 import * as transactionRoutes from '@/routes/transactions';
 import type {
     Card,
@@ -34,8 +33,9 @@ const props = defineProps<{
     categories: TransactionCategory[];
     totals: { income: number; expense: number };
     categoryBreakdown: CategoryBreakdownItem[];
+    incomeCategoryBreakdown: CategoryBreakdownItem[];
     filters: { year: number; month: number };
-    accountTransactionsCount: number;
+    cardTransactionsCount: number;
 }>();
 
 defineOptions({
@@ -170,13 +170,10 @@ function destroyTransaction(transaction: Transaction) {
 }
 
 function destroyAllTransactions() {
-    const message = `Eliminare TUTTE le ${props.accountTransactionsCount} transazioni di questo conto (tutti i mesi)? L'operazione non può essere annullata. Potrai reimportare l'estratto conto subito dopo.`;
+    const message = `Eliminare TUTTI i ${props.cardTransactionsCount} movimenti di questa carta (tutti i mesi)? L'operazione non può essere annullata. Potrai reimportare l'estratto conto subito dopo.`;
 
     if (confirm(message)) {
-        router.delete(
-            accountTransactionRoutes.destroy(props.card.financial_account_id)
-                .url,
-        );
+        router.delete(cardTransactionRoutes.destroy(props.card.id).url);
     }
 }
 </script>
@@ -188,12 +185,9 @@ function destroyAllTransactions() {
         <div class="grid gap-6 lg:grid-cols-[300px_1fr]">
             <div class="space-y-4">
                 <BankCard :card="card" />
-                <Link
-                    :href="accountRoutes.edit(card.financial_account_id)"
-                    class="text-sm text-muted-foreground underline underline-offset-4"
-                >
-                    Gestisci conto e carta
-                </Link>
+                <Button as-child variant="outline" size="sm" class="w-full">
+                    <Link :href="cardRoutes.edit(card.id)">Modifica carta</Link>
+                </Button>
             </div>
 
             <div class="space-y-6">
@@ -457,7 +451,7 @@ function destroyAllTransactions() {
                         </Form>
 
                         <div
-                            v-if="accountTransactionsCount > 0"
+                            v-if="cardTransactionsCount > 0"
                             class="flex items-center justify-between rounded-lg border border-destructive/30 p-4"
                         >
                             <div class="space-y-0.5">
@@ -465,10 +459,9 @@ function destroyAllTransactions() {
                                     Import andato male?
                                 </p>
                                 <p class="text-xs text-muted-foreground">
-                                    Elimina tutte le
-                                    {{ accountTransactionsCount }} transazioni
-                                    di questo conto (tutti i mesi) e reimporta
-                                    l'estratto conto da capo.
+                                    Elimina tutti i {{ cardTransactionsCount }}
+                                    movimenti di questa carta (tutti i mesi) e
+                                    reimporta l'estratto conto da capo.
                                 </p>
                             </div>
                             <Button
@@ -476,19 +469,30 @@ function destroyAllTransactions() {
                                 size="sm"
                                 @click="destroyAllTransactions"
                             >
-                                Elimina tutto il conto
+                                Elimina movimenti carta
                             </Button>
                         </div>
                     </TabsContent>
 
-                    <TabsContent value="statistiche" class="pt-4">
-                        <div class="rounded-lg border p-4">
+                    <TabsContent value="statistiche" class="flex flex-col gap-4 pt-4">
+                        <div class="@container rounded-lg border p-4">
                             <p class="mb-4 text-sm font-medium">
                                 Spesa per categoria · {{ monthLabel }}
                             </p>
                             <CategorySpendingChart
                                 :breakdown="categoryBreakdown"
                                 :currency="currency"
+                            />
+                        </div>
+                        <div class="@container rounded-lg border p-4">
+                            <p class="mb-4 text-sm font-medium">
+                                Entrate per categoria · {{ monthLabel }}
+                            </p>
+                            <CategorySpendingChart
+                                :breakdown="incomeCategoryBreakdown"
+                                :currency="currency"
+                                center-label="Entrate"
+                                empty-message="Nessuna entrata da mostrare per questo mese."
                             />
                         </div>
                     </TabsContent>

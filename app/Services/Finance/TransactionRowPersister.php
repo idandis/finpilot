@@ -2,7 +2,7 @@
 
 namespace App\Services\Finance;
 
-use App\Models\FinancialAccount;
+use App\Models\Card;
 use App\Models\Transaction;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -15,12 +15,14 @@ class TransactionRowPersister
     /**
      * Persist a stream of normalized transaction rows (shared by every
      * importer, whatever the source file format), applying dedup and
-     * automatic categorization consistently.
+     * automatic categorization consistently. Every import goes through a
+     * specific card - the card's own (optional) linked account is recorded
+     * on the row only as context, never used for dedup/scoping.
      *
      * @param  iterable<array{date: CarbonImmutable, description: string, amount: float, direction: string, category_id: int|null, isin?: string|null, quantity?: float|null}>  $rows
      * @return array{imported: int, duplicates: int, latest_year: int|null, latest_month: int|null}
      */
-    public function persist(FinancialAccount $account, ?int $cardId, iterable $rows): array
+    public function persist(Card $card, iterable $rows): array
     {
         $imported = 0;
         $duplicates = 0;
@@ -32,7 +34,7 @@ class TransactionRowPersister
         // of the same amount on the same day, with no other distinguishing data).
         $occurrenceIndex = [];
 
-        DB::transaction(function () use ($account, $cardId, $rows, &$imported, &$duplicates, &$occurrenceIndex, &$latestDate) {
+        DB::transaction(function () use ($card, $rows, &$imported, &$duplicates, &$occurrenceIndex, &$latestDate) {
             foreach ($rows as $row) {
                 $date = $row['date'];
                 $description = $row['description'];
@@ -43,7 +45,7 @@ class TransactionRowPersister
                     $latestDate = $date;
                 }
 
-                $signature = self::buildSignature($account->id, $date, $direction, $absoluteAmount, $description);
+                $signature = self::buildSignature($card->id, $date, $direction, $absoluteAmount, $description);
 
                 // If this exact signature repeats within the file, each repetition is
                 // treated as its own occurrence: the Nth time we see it here is compared
@@ -56,7 +58,7 @@ class TransactionRowPersister
                 $dedupHash = self::hashSignature($signature, $occurrence);
 
                 $exists = Transaction::query()
-                    ->where('financial_account_id', $account->id)
+                    ->where('card_id', $card->id)
                     ->where('dedup_hash', $dedupHash)
                     ->exists();
 
@@ -66,12 +68,12 @@ class TransactionRowPersister
                     continue;
                 }
 
-                $categoryId = $row['category_id'] ?? $this->categorizer->categorize($description, $account->user_id);
+                $categoryId = $row['category_id'] ?? $this->categorizer->categorize($description, $card->user_id);
 
                 try {
                     Transaction::create([
-                        'financial_account_id' => $account->id,
-                        'card_id' => $cardId,
+                        'financial_account_id' => $card->financial_account_id,
+                        'card_id' => $card->id,
                         'transaction_category_id' => $categoryId,
                         'transaction_date' => $date,
                         'description' => $description,
@@ -84,10 +86,10 @@ class TransactionRowPersister
 
                     $imported++;
                 } catch (UniqueConstraintViolationException) {
-                    // The (financial_account_id, dedup_hash) unique constraint is the final
-                    // safety net: if this exact row was inserted a moment ago by a concurrent
-                    // request (e.g. a double-clicked submit), treat it as a duplicate instead
-                    // of surfacing a database error.
+                    // The (card_id, dedup_hash) unique constraint is the final safety net:
+                    // if this exact row was inserted a moment ago by a concurrent request
+                    // (e.g. a double-clicked submit), treat it as a duplicate instead of
+                    // surfacing a database error.
                     $duplicates++;
                 }
             }
@@ -102,7 +104,7 @@ class TransactionRowPersister
     }
 
     /**
-     * Build the identity signature for a transaction: account, calendar day
+     * Build the identity signature for a transaction: card, calendar day
      * (the `transaction_date` column is a DATE with no time, so hashing a
      * parsed time-of-day here would make the hash impossible to reproduce
      * later from the stored row), direction, amount and description.
@@ -111,10 +113,10 @@ class TransactionRowPersister
      * the same amount on the same day) - that's what the occurrence index
      * in `persist()` is for; it doesn't need time-of-day to tell them apart.
      */
-    public static function buildSignature(int $accountId, \DateTimeInterface $date, string $direction, float $absoluteAmount, string $description): string
+    public static function buildSignature(int $cardId, \DateTimeInterface $date, string $direction, float $absoluteAmount, string $description): string
     {
         return implode('|', [
-            $accountId,
+            $cardId,
             $date->format('Y-m-d'),
             $direction,
             number_format($absoluteAmount, 2, '.', ''),

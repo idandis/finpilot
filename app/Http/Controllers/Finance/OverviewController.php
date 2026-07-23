@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Finance;
 use App\Http\Controllers\Controller;
 use App\Models\Card;
 use App\Models\Transaction;
+use App\Models\TransactionCategory;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection as SupportCollection;
@@ -14,34 +15,36 @@ use Inertia\Response;
 class OverviewController extends Controller
 {
     /**
-     * Show income/expense totals for every month, grouped by year, once
-     * across all of the user's cards and once per individual card - a
-     * transaction only counts towards a card's tab if it was imported
-     * against that specific card.
+     * Show income/expense totals for every month, grouped by year, once per
+     * individual card - a transaction only counts towards a card's tab if it
+     * was imported against that specific card. Investment activity (buys,
+     * sells, dividends...) is deliberately excluded: it isn't money spent or
+     * earned, just cash moved into or out of an asset that can be sold back -
+     * that movement has its own dedicated view on the Investments page.
      */
     public function index(Request $request): Response
     {
         $cards = Card::query()
-            ->whereRelation('financialAccount', 'user_id', $request->user()->id)
+            ->where('user_id', $request->user()->id)
             ->orderBy('name')
             ->get(['id', 'name']);
 
-        $accountIds = $request->user()->financialAccounts()->pluck('id');
+        $investmentCategoryIds = TransactionCategory::query()
+            ->where(fn ($query) => $query->whereNull('user_id')->orWhere('user_id', $request->user()->id))
+            ->where('name', 'Investimenti')
+            ->pluck('id');
 
         $transactions = Transaction::query()
-            ->whereIn('financial_account_id', $accountIds)
+            ->whereIn('card_id', $cards->pluck('id'))
             ->with('category')
-            ->get(['id', 'transaction_date', 'amount', 'direction', 'card_id', 'transaction_category_id']);
+            ->get(['id', 'transaction_date', 'amount', 'direction', 'card_id', 'transaction_category_id'])
+            ->reject(fn (Transaction $transaction) => $investmentCategoryIds->contains($transaction->transaction_category_id));
 
-        $tabs = collect([[
-            'id' => 'all',
-            'name' => 'Tutte le carte',
-            'overview' => $this->buildOverview($transactions),
-        ]])->concat($cards->map(fn (Card $card) => [
+        $tabs = $cards->map(fn (Card $card) => [
             'id' => (string) $card->id,
             'name' => $card->name,
             'overview' => $this->buildOverview($transactions->where('card_id', $card->id)),
-        ]));
+        ]);
 
         return Inertia::render('finance/Overview/Index', [
             'tabs' => $tabs->values(),

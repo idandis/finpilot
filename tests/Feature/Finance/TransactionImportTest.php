@@ -30,7 +30,7 @@ class TransactionImportTest extends TestCase
     {
         $user = User::factory()->create();
         $account = FinancialAccount::factory()->for($user)->create();
-        $card = Card::factory()->for($account, 'financialAccount')->create();
+        $card = Card::factory()->for($account, 'financialAccount')->create(['user_id' => $user->id]);
         TransactionCategory::factory()->create(['user_id' => null, 'name' => 'Alimentari']);
 
         $file = UploadedFile::fake()->createWithContent('estratto.csv', $this->statementCsv());
@@ -62,7 +62,7 @@ class TransactionImportTest extends TestCase
     {
         $user = User::factory()->create();
         $account = FinancialAccount::factory()->for($user)->create();
-        $card = Card::factory()->for($account, 'financialAccount')->create();
+        $card = Card::factory()->for($account, 'financialAccount')->create(['user_id' => $user->id]);
 
         $csv = $this->statementCsv();
 
@@ -102,7 +102,7 @@ class TransactionImportTest extends TestCase
     {
         $user = User::factory()->create();
         $account = FinancialAccount::factory()->for($user)->create();
-        $card = Card::factory()->for($account, 'financialAccount')->create();
+        $card = Card::factory()->for($account, 'financialAccount')->create(['user_id' => $user->id]);
 
         $csv = implode("\n", [
             'Tipo,Prodotto,Data di inizio,Data di completamento,Descrizione,Importo,Costo,Valuta,State,Saldo',
@@ -139,7 +139,7 @@ class TransactionImportTest extends TestCase
     {
         $user = User::factory()->create();
         $account = FinancialAccount::factory()->for($user)->create();
-        $card = Card::factory()->for($account, 'financialAccount')->create();
+        $card = Card::factory()->for($account, 'financialAccount')->create(['user_id' => $user->id]);
 
         $csv = implode("\n", [
             'Tipo,Prodotto,Data di inizio,Data di completamento,Descrizione,Importo,Costo,Valuta,State,Saldo',
@@ -166,7 +166,7 @@ class TransactionImportTest extends TestCase
     {
         $user = User::factory()->create();
         $account = FinancialAccount::factory()->for($user)->create();
-        $card = Card::factory()->for($account, 'financialAccount')->create();
+        $card = Card::factory()->for($account, 'financialAccount')->create(['user_id' => $user->id]);
 
         $csv = implode("\n", [
             'Data operazione,Data contabile,Iban,Tipologia,Nome,Descrizione,Importo ( € )',
@@ -202,7 +202,7 @@ class TransactionImportTest extends TestCase
     {
         $user = User::factory()->create();
         $account = FinancialAccount::factory()->for($user)->create();
-        $card = Card::factory()->for($account, 'financialAccount')->create();
+        $card = Card::factory()->for($account, 'financialAccount')->create(['user_id' => $user->id]);
 
         $csv = implode("\n", [
             'Data operazione,Data contabile,Iban,Tipologia,Nome,Descrizione,Importo ( € )',
@@ -225,5 +225,53 @@ class TransactionImportTest extends TestCase
 
         // Re-importing the identical file must not create two more rows.
         $this->assertDatabaseCount('transactions', 2);
+    }
+
+    /**
+     * Cards no longer require a linked account: importing a statement must
+     * work exactly the same way for a standalone card, writing a null
+     * financial_account_id but a valid card_id on every imported row.
+     */
+    public function test_a_user_can_import_a_csv_statement_into_a_card_without_an_account()
+    {
+        $user = User::factory()->create();
+        $card = Card::factory()->for($user)->create(['financial_account_id' => null]);
+        TransactionCategory::factory()->create(['user_id' => null, 'name' => 'Alimentari']);
+
+        $response = $this->actingAs($user)->post(route('transactions.import', $card), [
+            'file' => UploadedFile::fake()->createWithContent('estratto.csv', $this->statementCsv()),
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseCount('transactions', 4);
+
+        $groceries = Transaction::where('description', 'ESSELUNGA MILANO')->first();
+        $this->assertNotNull($groceries);
+        $this->assertNull($groceries->financial_account_id);
+        $this->assertSame($card->id, $groceries->card_id);
+    }
+
+    /**
+     * Dedup for a standalone card is scoped by card_id (there is no account
+     * to scope it by), so re-importing the same statement must still be
+     * recognised as duplicates.
+     */
+    public function test_reimporting_the_same_statement_into_a_card_without_an_account_does_not_create_duplicates()
+    {
+        $user = User::factory()->create();
+        $card = Card::factory()->for($user)->create(['financial_account_id' => null]);
+
+        $csv = $this->statementCsv();
+
+        $this->actingAs($user)->post(route('transactions.import', $card), [
+            'file' => UploadedFile::fake()->createWithContent('estratto.csv', $csv),
+        ]);
+        $this->assertDatabaseCount('transactions', 4);
+
+        $this->actingAs($user)->post(route('transactions.import', $card), [
+            'file' => UploadedFile::fake()->createWithContent('estratto.csv', $csv),
+        ]);
+
+        $this->assertDatabaseCount('transactions', 4);
     }
 }

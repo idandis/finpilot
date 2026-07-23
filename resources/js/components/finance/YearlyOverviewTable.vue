@@ -130,7 +130,7 @@ function hasActivity(row: MonthlyOverview) {
                 </TableFooter>
             </Table>
 
-            <div class="mt-6 rounded-lg border p-4">
+            <div class="@container mt-6 rounded-lg border p-4">
                 <h3 class="mb-4 text-sm font-medium">
                     Spese per categoria - {{ year.year }}
                 </h3>

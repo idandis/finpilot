@@ -22,11 +22,17 @@ class CardIndexTest extends TestCase
     {
         $user = User::factory()->create();
         $account = FinancialAccount::factory()->for($user)->create();
-        Card::factory()->for($account, 'financialAccount')->create(['name' => 'La mia carta']);
+        Card::factory()->for($account, 'financialAccount')->create([
+            'user_id' => $user->id,
+            'name' => 'La mia carta',
+        ]);
 
         $otherUser = User::factory()->create();
         $otherAccount = FinancialAccount::factory()->for($otherUser)->create();
-        Card::factory()->for($otherAccount, 'financialAccount')->create(['name' => 'Carta altrui']);
+        Card::factory()->for($otherAccount, 'financialAccount')->create([
+            'user_id' => $otherUser->id,
+            'name' => 'Carta altrui',
+        ]);
 
         $response = $this->actingAs($user)->get(route('cards.index'));
 

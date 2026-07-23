@@ -17,7 +17,6 @@ import type { Card, CategoryBudgetRow } from '@/types';
 
 const props = defineProps<{
     budgets: CategoryBudgetRow[];
-    totalBudget: number;
     cards: Card[];
 }>();
 
@@ -29,9 +28,43 @@ const emptyBudgets = computed(() =>
 );
 
 const activeTab = ref<'set' | 'empty'>('set');
-const visibleBudgets = computed(() =>
+const cardFilter = ref<'all' | 'none' | string>('all');
+
+const tabBudgets = computed(() =>
     activeTab.value === 'set' ? setBudgets.value : emptyBudgets.value,
 );
+
+const visibleBudgets = computed(() =>
+    tabBudgets.value.filter((row) => {
+        if (cardFilter.value === 'all') {
+            return true;
+        }
+
+        if (cardFilter.value === 'none') {
+            return row.card_id === null;
+        }
+
+        return String(row.card_id) === cardFilter.value;
+    }),
+);
+
+const visibleTotal = computed(() =>
+    visibleBudgets.value.reduce((sum, row) => sum + (row.monthly_budget ?? 0), 0),
+);
+
+const totalLabel = computed(() => {
+    if (cardFilter.value === 'all') {
+        return 'Totale';
+    }
+
+    if (cardFilter.value === 'none') {
+        return 'Totale · Nessuna carta';
+    }
+
+    const card = props.cards.find((c) => String(c.id) === cardFilter.value);
+
+    return card ? `Totale · ${card.name}` : 'Totale';
+});
 
 defineOptions({
     layout: {
@@ -129,16 +162,33 @@ function saveBudget(row: CategoryBudgetRow) {
             description="Imposta quanto vorresti spendere al mese per ciascuna categoria. Il confronto con la spesa reale arriva in un secondo momento."
         />
 
-        <Tabs v-model="activeTab">
-            <TabsList>
-                <TabsTrigger value="set"
-                    >Impostati ({{ setBudgets.length }})</TabsTrigger
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            <Tabs v-model="activeTab">
+                <TabsList>
+                    <TabsTrigger value="set"
+                        >Impostati ({{ setBudgets.length }})</TabsTrigger
+                    >
+                    <TabsTrigger value="empty"
+                        >Da impostare ({{ emptyBudgets.length }})</TabsTrigger
+                    >
+                </TabsList>
+            </Tabs>
+
+            <div class="grid gap-2">
+                <label for="card-filter" class="sr-only">Filtra per carta</label>
+                <select
+                    id="card-filter"
+                    v-model="cardFilter"
+                    class="h-9 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 >
-                <TabsTrigger value="empty"
-                    >Da impostare ({{ emptyBudgets.length }})</TabsTrigger
-                >
-            </TabsList>
-        </Tabs>
+                    <option value="all">Tutte le carte</option>
+                    <option value="none">Nessuna carta</option>
+                    <option v-for="card in cards" :key="card.id" :value="String(card.id)">
+                        {{ card.name }}
+                    </option>
+                </select>
+            </div>
+        </div>
 
         <Table>
             <TableHeader>
@@ -244,10 +294,10 @@ function saveBudget(row: CategoryBudgetRow) {
             </TableBody>
             <TableFooter>
                 <TableRow>
-                    <TableCell class="font-medium">Totale</TableCell>
+                    <TableCell class="font-medium">{{ totalLabel }}</TableCell>
                     <TableCell />
                     <TableCell class="text-right font-medium">
-                        {{ formatCurrency(totalBudget) }}
+                        {{ formatCurrency(visibleTotal) }}
                     </TableCell>
                 </TableRow>
             </TableFooter>
