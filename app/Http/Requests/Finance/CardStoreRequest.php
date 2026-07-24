@@ -39,6 +39,7 @@ class CardStoreRequest extends FormRequest
                     fn ($query) => $query->where('user_id', $this->user()->id)
                 ),
             ],
+            'is_investment_card' => ['sometimes', 'boolean'],
         ];
     }
 }

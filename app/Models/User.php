@@ -80,4 +80,12 @@ class User extends Authenticatable implements PasskeyUser
     {
         return $this->hasMany(CategoryRule::class);
     }
+
+    /**
+     * @return HasMany<InvestmentNote, $this>
+     */
+    public function investmentNotes(): HasMany
+    {
+        return $this->hasMany(InvestmentNote::class);
+    }
 }

@@ -4,6 +4,7 @@ import CardController from '@/actions/App/Http/Controllers/Finance/CardControlle
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { CARD_ICON_LABELS, CARD_ICON_NAMES } from '@/lib/card-icons';
@@ -168,6 +169,17 @@ const cardTypeLabels: Record<string, string> = {
                     </option>
                 </select>
                 <InputError :message="errors.financial_account_id" />
+            </div>
+
+            <div class="grid gap-1.5">
+                <Label for="is_investment_card" class="flex items-center space-x-3">
+                    <input type="hidden" name="is_investment_card" value="0" />
+                    <Checkbox id="is_investment_card" name="is_investment_card" value="1" />
+                    <span>Carta da investimenti</span>
+                </Label>
+                <p class="text-xs text-muted-foreground">
+                    Solo le carte marcate come da investimenti compaiono nella sezione Investimenti.
+                </p>
             </div>
 
             <div class="flex items-center gap-4">

@@ -1,10 +1,8 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
 import {
-    BookOpen,
     CalendarRange,
     CreditCard,
-    FolderGit2,
     LayoutGrid,
     PiggyBank,
     Tag,
@@ -50,16 +48,6 @@ const mainNavItems: NavItem[] = [
         icon: CreditCard,
     },
     {
-        title: 'Categorie',
-        href: categories.index(),
-        icon: Tag,
-    },
-    {
-        title: 'Regole categorie',
-        href: categoryRules.index(),
-        icon: Tags,
-    },
-    {
         title: 'Budget',
         href: budgets.index(),
         icon: PiggyBank,
@@ -73,14 +61,14 @@ const mainNavItems: NavItem[] = [
 
 const footerNavItems: NavItem[] = [
     {
-        title: 'Repository',
-        href: 'https://github.com/laravel/vue-starter-kit',
-        icon: FolderGit2,
+        title: 'Categorie',
+        href: categories.index(),
+        icon: Tag,
     },
     {
-        title: 'Documentation',
-        href: 'https://laravel.com/docs/starter-kits#vue',
-        icon: BookOpen,
+        title: 'Regole categorie',
+        href: categoryRules.index(),
+        icon: Tags,
     },
 ];
 </script>

@@ -40,6 +40,7 @@ class CardUpdateRequest extends FormRequest
                 ),
             ],
             'is_active' => ['sometimes', 'boolean'],
+            'is_investment_card' => ['sometimes', 'boolean'],
         ];
     }
 }

@@ -2,6 +2,9 @@
 
 namespace App\Providers;
 
+use App\Contracts\MarketPriceProvider;
+use App\Services\Finance\EodhdCallBudget;
+use App\Services\Finance\EodhdMarketPriceProvider;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -15,7 +18,14 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(EodhdCallBudget::class, fn () => new EodhdCallBudget(
+            (int) config('services.eodhd.daily_call_budget', 18),
+        ));
+
+        $this->app->bind(MarketPriceProvider::class, fn ($app) => new EodhdMarketPriceProvider(
+            config('services.eodhd.api_key'),
+            $app->make(EodhdCallBudget::class),
+        ));
     }
 
     /**

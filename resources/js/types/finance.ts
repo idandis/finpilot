@@ -16,6 +16,7 @@ export type Card = {
     owner_name: string | null;
     iban: string | null;
     is_active: boolean;
+    is_investment_card: boolean;
     financial_account?: Pick<
         FinancialAccount,
         'id' | 'name' | 'bank_name' | 'color' | 'currency'
@@ -117,15 +118,26 @@ export type YearlyInvestmentFlow = {
 export type OpenInvestmentPosition = {
     isin: string;
     name: string;
+    is_crypto: boolean;
     quantity: number;
     invested: number;
     average_price: number;
     opened_at: string;
+    current_price: number | null;
+    market_value: number | null;
+    unrealized_gain: number | null;
+    unrealized_gain_percent: number | null;
+    price_date: string | null;
+    price_currency: string | null;
+    current_price_original: number | null;
+    market_value_original: number | null;
+    realized_gain: number;
 };
 
 export type ClosedInvestmentPosition = {
     isin: string;
     name: string;
+    is_crypto: boolean;
     invested: number;
     received: number;
     realized_gain: number;
@@ -138,11 +150,75 @@ export type InvestmentPositions = {
     closed: ClosedInvestmentPosition[];
 };
 
+export type PortfolioHistoryPoint = {
+    date: string;
+    invested: number;
+    market_value: number | null;
+};
+
+export type UnpricedPosition = {
+    isin: string;
+    name: string;
+    quantity: number;
+    invested: number;
+};
+
+export type PortfolioHistory = {
+    points: PortfolioHistoryPoint[];
+    market_data_since: string | null;
+    unpriced_positions: UnpricedPosition[];
+};
+
+export type PositionTransaction = {
+    id: number;
+    transaction_date: string;
+    description: string;
+    amount: string;
+    direction: TransactionDirection;
+    isin: string | null;
+    quantity: string | null;
+};
+
+export type InvestmentNote = {
+    id: number;
+    body: string;
+    created_at: string;
+};
+
+export type InvestmentNewsArticle = {
+    id: number;
+    title: string;
+    content: string | null;
+    url: string | null;
+    published_at: string;
+    sentiment_polarity: number | null;
+    tags: string[] | null;
+};
+
+export type InvestmentNewsHighlight = {
+    id: number;
+    title: string;
+    url: string | null;
+    published_at: string;
+    sentiment_polarity: number | null;
+    figures: string[];
+};
+
+export type InvestmentNews = {
+    articles: InvestmentNewsArticle[];
+    fetchedAt: string | null;
+    resolvable: boolean;
+    highlights: InvestmentNewsHighlight[];
+};
+
 export type InvestmentTab = {
     id: string;
     name: string;
     cashFlow: YearlyInvestmentFlow[];
     positions: InvestmentPositions;
+    portfolioHistory: PortfolioHistory;
+    accountBalance: number | null;
+    wealthHistory: PortfolioHistory | null;
 };
 
 export type CategoryBudgetRow = {

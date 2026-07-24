@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'eodhd' => [
+        'api_key' => env('EODHD_API_KEY'),
+        'daily_call_budget' => env('EODHD_DAILY_CALL_BUDGET', 18),
+    ],
+
 ];

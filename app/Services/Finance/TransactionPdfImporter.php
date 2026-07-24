@@ -33,12 +33,11 @@ class TransactionPdfImporter
     private const INVESTMENT_TIPI = ['Commercio', 'Interessi', 'Rendimento', 'Premio', 'Imposte'];
 
     /**
-     * Matches Trade Republic's own "Commercio" description format, e.g.
-     * "Buy trade IE00BK5BQT80 Vanguard Funds PLC - Vanguard FTSE All-World
-     * UCITS ETF (USD) Accumulating, quantity: 0.344482" - captures the ISIN
-     * and the traded quantity, ignored for every other row type.
+     * How many unreconciled rows to report back in detail - a cap protects
+     * against a pathological file turning the result payload into something
+     * huge, while still giving enough to diagnose a real mismatch.
      */
-    private const TRADE_PATTERN = '/^(?:Cancellation\s+)?(?:Buy trade|Sell trade|Savings plan execution)\s+([A-Z]{2}[A-Z0-9]{10})\s+.+?,\s*quantity:\s*([\d.]+)$/';
+    private const MAX_SKIPPED_ROWS_REPORTED = 50;
 
     public function __construct(private readonly TransactionRowPersister $persister) {}
 
@@ -50,7 +49,7 @@ class TransactionPdfImporter
      * the balance actually moved, starting from the statement's own
      * "saldo iniziale".
      *
-     * @return array{imported: int, duplicates: int, skipped: int, error: string|null, latest_year: int|null, latest_month: int|null}
+     * @return array{imported: int, duplicates: int, skipped: int, skipped_rows: array<int, array{date: string, tipo: string, description: string, amount: float, balance_before: float, balance_printed: float}>, error: string|null, latest_year: int|null, latest_month: int|null}
      */
     public function import(Card $card, UploadedFile $file): array
     {
@@ -87,6 +86,7 @@ class TransactionPdfImporter
 
         $rows = [];
         $skipped = 0;
+        $skippedRows = [];
         $balance = $startingBalance;
 
         foreach ($matches as $match) {
@@ -108,6 +108,17 @@ class TransactionPdfImporter
                 // The row's amount doesn't reconcile against the running balance
                 // printed by the bank - trust the document's own balance for the
                 // next row rather than guessing this one's direction.
+                if (count($skippedRows) < self::MAX_SKIPPED_ROWS_REPORTED) {
+                    $skippedRows[] = [
+                        'date' => sprintf('%04d-%02d-%02d', (int) $year, self::MONTHS[$month], (int) $day),
+                        'tipo' => $tipo,
+                        'description' => trim(preg_replace('/\s+/u', ' ', $descriptionRaw)),
+                        'amount' => $amount,
+                        'balance_before' => $balance,
+                        'balance_printed' => $saldo,
+                    ];
+                }
+
                 $balance = $saldo;
                 $skipped++;
 
@@ -134,12 +145,13 @@ class TransactionPdfImporter
         return [
             ...$result,
             'skipped' => $skipped,
+            'skipped_rows' => $skippedRows,
             'error' => null,
         ];
     }
 
     /**
-     * @return array{imported: int, duplicates: int, skipped: int, error: string, latest_year: null, latest_month: null}
+     * @return array{imported: int, duplicates: int, skipped: int, skipped_rows: array{}, error: string, latest_year: null, latest_month: null}
      */
     private function error(string $message): array
     {
@@ -147,6 +159,7 @@ class TransactionPdfImporter
             'imported' => 0,
             'duplicates' => 0,
             'skipped' => 0,
+            'skipped_rows' => [],
             'error' => $message,
             'latest_year' => null,
             'latest_month' => null,
@@ -174,10 +187,17 @@ class TransactionPdfImporter
      */
     private function parseTrade(string $description): array
     {
-        if (! preg_match(self::TRADE_PATTERN, $description, $match)) {
-            return ['isin' => null, 'quantity' => null];
+        $trade = TradeDescription::parseTrade($description);
+
+        if ($trade['isin'] !== null) {
+            return ['isin' => $trade['isin'], 'quantity' => $trade['quantity']];
         }
 
-        return ['isin' => $match[1], 'quantity' => (float) $match[2]];
+        // Dividend rows carry an ISIN but no quantity - worth keeping the
+        // ISIN for future per-instrument analysis, even though this row
+        // never affects a position's cost basis or share count (see
+        // InvestmentPositionCalculator's own TradeDescription::isTradeRow()
+        // check).
+        return ['isin' => TradeDescription::parseDividend($description)['isin'], 'quantity' => null];
     }
 }

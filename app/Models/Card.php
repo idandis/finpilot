@@ -23,10 +23,11 @@ use Illuminate\Support\Carbon;
  * @property string|null $owner_name
  * @property string|null $iban
  * @property bool $is_active
+ * @property bool $is_investment_card
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name', 'type', 'last_four_digits', 'circuit', 'is_active', 'color', 'icon', 'owner_name', 'iban', 'financial_account_id'])]
+#[Fillable(['name', 'type', 'last_four_digits', 'circuit', 'is_active', 'is_investment_card', 'color', 'icon', 'owner_name', 'iban', 'financial_account_id'])]
 class Card extends Model
 {
     /** @use HasFactory<CardFactory> */
@@ -45,6 +46,7 @@ class Card extends Model
     {
         return [
             'is_active' => 'boolean',
+            'is_investment_card' => 'boolean',
         ];
     }
 
