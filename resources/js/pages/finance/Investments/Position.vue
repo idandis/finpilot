@@ -166,7 +166,7 @@ watch([newsYearFilter, newsMonthFilter, newsDayFilter], () => {
 <template>
     <Head :title="instrumentName" />
 
-    <div class="flex flex-col space-y-8 p-4">
+    <div class="mx-auto flex w-full max-w-[64rem] flex-col space-y-8 p-4">
         <Heading :title="instrumentName" :description="isin" />
 
         <div>

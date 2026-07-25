@@ -156,7 +156,7 @@ function saveBudget(row: CategoryBudgetRow) {
 <template>
     <Head title="Budget" />
 
-    <div class="flex flex-col space-y-6 p-4">
+    <div class="mx-auto flex w-full max-w-[64rem] flex-col space-y-6 p-4">
         <Heading
             title="Budget"
             description="Imposta quanto vorresti spendere al mese per ciascuna categoria. Il confronto con la spesa reale arriva in un secondo momento."

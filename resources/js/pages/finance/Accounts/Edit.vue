@@ -50,7 +50,7 @@ function destroyCard(card: { id: number; name: string }) {
 <template>
     <Head :title="`Modifica ${account.name}`" />
 
-    <div class="flex flex-col space-y-10 p-4">
+    <div class="mx-auto flex w-full max-w-[64rem] flex-col space-y-10 p-4">
         <div class="max-w-lg space-y-6">
             <Heading title="Modifica conto" :description="account.name" />
 

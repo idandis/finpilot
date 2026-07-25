@@ -5,10 +5,12 @@ use App\Http\Controllers\Finance\BudgetController;
 use App\Http\Controllers\Finance\CardController;
 use App\Http\Controllers\Finance\CategoryController;
 use App\Http\Controllers\Finance\CategoryRuleController;
+use App\Http\Controllers\Finance\CompanyAnalysisController;
 use App\Http\Controllers\Finance\InvestmentController;
 use App\Http\Controllers\Finance\InvestmentNewsController;
 use App\Http\Controllers\Finance\InvestmentNoteController;
 use App\Http\Controllers\Finance\InvestmentPositionController;
+use App\Http\Controllers\Finance\MarketController;
 use App\Http\Controllers\Finance\OverviewController;
 use App\Http\Controllers\Finance\TransactionController;
 use App\Http\Controllers\Finance\TransactionImportController;
@@ -22,6 +24,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('investments/positions/{isin}/notes', [InvestmentNoteController::class, 'store'])->name('investments.notes.store');
     Route::delete('investments/notes/{note}', [InvestmentNoteController::class, 'destroy'])->name('investments.notes.destroy');
     Route::post('investments/positions/{isin}/news/refresh', [InvestmentNewsController::class, 'refresh'])->name('investments.news.refresh');
+
+    Route::get('market', [MarketController::class, 'index'])->name('market.index');
+
+    Route::get('company-analyses', [CompanyAnalysisController::class, 'index'])->name('company-analyses.index');
+    Route::get('company-analyses/create', [CompanyAnalysisController::class, 'create'])->name('company-analyses.create');
+    Route::post('company-analyses', [CompanyAnalysisController::class, 'store'])->name('company-analyses.store');
+    Route::get('company-analyses/{companyAnalysis}', [CompanyAnalysisController::class, 'show'])->name('company-analyses.show');
+    Route::patch('company-analyses/{companyAnalysis}', [CompanyAnalysisController::class, 'update'])->name('company-analyses.update');
+    Route::post('company-analyses/{companyAnalysis}/refresh-indicators', [CompanyAnalysisController::class, 'refreshIndicators'])->name('company-analyses.refresh-indicators');
+    Route::post('company-analyses/{companyAnalysis}/refresh-price-history', [CompanyAnalysisController::class, 'refreshPriceHistory'])->name('company-analyses.refresh-price-history');
+    Route::delete('company-analyses/{companyAnalysis}', [CompanyAnalysisController::class, 'destroy'])->name('company-analyses.destroy');
 
     Route::get('financial-accounts', [AccountController::class, 'index'])->name('accounts.index');
     Route::get('financial-accounts/create', [AccountController::class, 'create'])->name('accounts.create');

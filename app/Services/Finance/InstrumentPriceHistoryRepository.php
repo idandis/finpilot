@@ -32,11 +32,35 @@ class InstrumentPriceHistoryRepository
             return 1;
         }
 
+        // A plain ['isin' => ..., 'price_date' => 'Y-m-d'] match array doesn't
+        // reliably find an existing row via updateOrCreate() here: SQLite
+        // persists the `date`-cast column with a " 00:00:00" time suffix, so
+        // a raw string match against just the date part silently misses it
+        // and re-insert collides with the unique index instead. whereDate()
+        // compares by calendar day regardless of that stored time component.
+        $existingDates = InstrumentPriceHistory::query()
+            ->where('isin', $record->isin)
+            ->pluck('price_date')
+            ->map(fn ($date) => $date->format('Y-m-d'))
+            ->flip();
+
         foreach ($history as $point) {
-            InstrumentPriceHistory::query()->updateOrCreate(
-                ['isin' => $record->isin, 'price_date' => $point->date->format('Y-m-d')],
-                ['close_price' => $point->price],
-            );
+            $dateKey = $point->date->format('Y-m-d');
+            $attributes = [
+                'close_price' => $point->price,
+                'open_price' => $point->open,
+                'high_price' => $point->high,
+                'low_price' => $point->low,
+            ];
+
+            if ($existingDates->has($dateKey)) {
+                InstrumentPriceHistory::query()
+                    ->where('isin', $record->isin)
+                    ->whereDate('price_date', $dateKey)
+                    ->update($attributes);
+            } else {
+                InstrumentPriceHistory::query()->create(['isin' => $record->isin, 'price_date' => $dateKey, ...$attributes]);
+            }
         }
 
         $record->update(['history_backfilled_at' => now()]);
@@ -55,6 +79,6 @@ class InstrumentPriceHistoryRepository
         return InstrumentPriceHistory::query()
             ->where('isin', $isin)
             ->orderBy('price_date')
-            ->get(['price_date', 'close_price']);
+            ->get(['price_date', 'close_price', 'open_price', 'high_price', 'low_price']);
     }
 }

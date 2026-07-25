@@ -20,7 +20,7 @@ defineProps<{
 <template>
     <Head title="Carte" />
 
-    <div class="flex flex-col space-y-6 p-4">
+    <div class="mx-auto flex w-full max-w-[64rem] flex-col space-y-6 p-4">
         <div class="flex items-center justify-between">
             <Heading
                 title="Le tue carte"

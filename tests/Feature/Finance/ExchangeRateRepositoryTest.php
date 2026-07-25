@@ -138,4 +138,9 @@ class FakeRateProvider implements MarketPriceProvider
     {
         return null;
     }
+
+    public function fetchFundamentals(string $symbol): ?array
+    {
+        return null;
+    }
 }

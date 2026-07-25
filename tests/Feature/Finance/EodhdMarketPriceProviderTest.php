@@ -159,6 +159,24 @@ class EodhdMarketPriceProviderTest extends TestCase
         });
     }
 
+    public function test_it_captures_ohlc_alongside_the_close_for_a_candlestick_chart()
+    {
+        Http::fake([
+            'eodhd.com/api/eod/*' => Http::response([
+                ['date' => '2026-07-22', 'open' => 103.0, 'high' => 106.0, 'low' => 102.5, 'close' => 105.32],
+            ]),
+        ]);
+
+        $provider = $this->provider();
+        $history = $provider->fetchHistory('VWCE', 'XETRA', Carbon::parse('2026-01-01'), Carbon::parse('2026-07-23'));
+
+        $this->assertNotNull($history);
+        $this->assertSame(103.0, $history[0]->open);
+        $this->assertSame(106.0, $history[0]->high);
+        $this->assertSame(102.5, $history[0]->low);
+        $this->assertSame(105.32, $history[0]->price);
+    }
+
     public function test_it_returns_an_empty_array_when_the_history_call_succeeds_with_no_data()
     {
         Http::fake([
@@ -244,6 +262,44 @@ class EodhdMarketPriceProviderTest extends TestCase
         $provider = new EodhdMarketPriceProvider('fake-token', new EodhdCallBudget(dailyLimit: 9));
 
         $this->assertNull($provider->fetchNews('AAPL', 'US'));
+        Http::assertNothingSent();
+    }
+
+    public function test_it_fetches_fundamentals_for_a_symbol()
+    {
+        Http::fake([
+            'eodhd.com/api/fundamentals/*' => Http::response([
+                'Highlights' => ['ProfitMargin' => 0.25],
+            ]),
+        ]);
+
+        $provider = $this->provider();
+        $fundamentals = $provider->fetchFundamentals('AAPL.US');
+
+        $this->assertNotNull($fundamentals);
+        $this->assertSame(0.25, $fundamentals['Highlights']['ProfitMargin']);
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'fundamentals/AAPL.US'));
+    }
+
+    public function test_it_returns_null_when_the_fundamentals_request_fails()
+    {
+        Http::fake([
+            'eodhd.com/api/fundamentals/*' => Http::response(null, 500),
+        ]);
+
+        $provider = $this->provider();
+
+        $this->assertNull($provider->fetchFundamentals('AAPL.US'));
+    }
+
+    public function test_it_refuses_to_fetch_fundamentals_when_the_budget_is_below_the_fundamentals_call_cost()
+    {
+        Http::fake();
+
+        $provider = new EodhdMarketPriceProvider('fake-token', new EodhdCallBudget(dailyLimit: 9));
+
+        $this->assertNull($provider->fetchFundamentals('AAPL.US'));
         Http::assertNothingSent();
     }
 }

@@ -2,9 +2,11 @@
 
 namespace App\Providers;
 
+use App\Contracts\FundamentalDataProvider;
 use App\Contracts\MarketPriceProvider;
 use App\Services\Finance\EodhdCallBudget;
 use App\Services\Finance\EodhdMarketPriceProvider;
+use App\Services\Finance\FmpFundamentalDataProvider;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -25,6 +27,10 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(MarketPriceProvider::class, fn ($app) => new EodhdMarketPriceProvider(
             config('services.eodhd.api_key'),
             $app->make(EodhdCallBudget::class),
+        ));
+
+        $this->app->bind(FundamentalDataProvider::class, fn () => new FmpFundamentalDataProvider(
+            config('services.fmp.api_key'),
         ));
     }
 

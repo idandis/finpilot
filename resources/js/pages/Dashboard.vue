@@ -28,7 +28,7 @@ defineOptions({
 <template>
     <Head title="Dashboard" />
 
-    <div class="flex flex-col space-y-8 p-4">
+    <div class="mx-auto flex w-full max-w-[64rem] flex-col space-y-8 p-4">
         <div>
             <div class="flex items-start justify-between gap-4">
                 <Heading title="Le tue carte" />

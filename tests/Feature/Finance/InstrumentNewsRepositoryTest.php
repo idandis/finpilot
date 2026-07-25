@@ -231,4 +231,9 @@ class FakeNewsProvider implements MarketPriceProvider
 
         return $this->articles;
     }
+
+    public function fetchFundamentals(string $symbol): ?array
+    {
+        return null;
+    }
 }

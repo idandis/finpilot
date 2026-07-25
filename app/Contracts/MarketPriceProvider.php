@@ -44,4 +44,20 @@ interface MarketPriceProvider
      * @return array<int, FetchedNewsArticle>|null
      */
     public function fetchNews(string $code, string $exchange): ?array;
+
+    /**
+     * Fetch the raw fundamentals payload (Highlights, Valuation, Financials)
+     * for a symbol in "{TICKER}.{EXCHANGE}" form. The shape is provider-
+     * specific and deeply nested, so it's handed back as a raw decoded
+     * array rather than a DTO - callers (FundamentalIndicatorMapper) know
+     * how to read it. Substantially more expensive than the price/history
+     * endpoints (see EodhdMarketPriceProvider::FUNDAMENTALS_CALL_COST) -
+     * callers must check their remaining budget covers that cost before
+     * calling this, not just `>= 1`. Returns null when the call itself
+     * failed, when the plan doesn't include this endpoint, or when the
+     * symbol has no fundamentals data.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function fetchFundamentals(string $symbol): ?array;
 }

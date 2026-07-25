@@ -181,7 +181,7 @@ function destroyAllTransactions() {
 <template>
     <Head :title="`${card.name} · ${monthLabel}`" />
 
-    <div class="flex flex-col gap-6 p-4">
+    <div class="mx-auto flex w-full max-w-[64rem] flex-col gap-6 p-4">
         <div class="grid gap-6 lg:grid-cols-[300px_1fr]">
             <div class="space-y-4">
                 <BankCard :card="card" />

@@ -22,6 +22,12 @@ class EodhdMarketPriceProvider implements MarketPriceProvider
      */
     public const NEWS_CALL_COST = 10;
 
+    /**
+     * EODHD bills the fundamentals endpoint at 10 calls per request,
+     * regardless of ticker.
+     */
+    public const FUNDAMENTALS_CALL_COST = 10;
+
     public function __construct(
         private readonly ?string $apiKey,
         private readonly EodhdCallBudget $budget,
@@ -116,7 +122,13 @@ class EodhdMarketPriceProvider implements MarketPriceProvider
 
         return collect($response->json() ?? [])
             ->filter(fn ($row) => isset($row['close'], $row['date']))
-            ->map(fn ($row) => new FetchedPrice(price: (float) $row['close'], date: Carbon::parse($row['date'])))
+            ->map(fn ($row) => new FetchedPrice(
+                price: (float) $row['close'],
+                date: Carbon::parse($row['date']),
+                open: isset($row['open']) ? (float) $row['open'] : null,
+                high: isset($row['high']) ? (float) $row['high'] : null,
+                low: isset($row['low']) ? (float) $row['low'] : null,
+            ))
             ->values()
             ->all();
     }
@@ -151,5 +163,24 @@ class EodhdMarketPriceProvider implements MarketPriceProvider
             ))
             ->values()
             ->all();
+    }
+
+    public function fetchFundamentals(string $symbol): ?array
+    {
+        if (! $this->apiKey || $this->budget->remaining() < self::FUNDAMENTALS_CALL_COST) {
+            return null;
+        }
+
+        $response = Http::get(self::BASE_URL."/fundamentals/{$symbol}", [
+            'api_token' => $this->apiKey,
+            'fmt' => 'json',
+        ]);
+        $this->budget->increment(self::FUNDAMENTALS_CALL_COST);
+
+        if ($response->failed() || empty($response->json())) {
+            return null;
+        }
+
+        return $response->json();
     }
 }

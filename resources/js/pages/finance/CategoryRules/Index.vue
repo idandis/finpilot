@@ -85,7 +85,7 @@ function destroyRule(rule: CategoryRule) {
 <template>
     <Head title="Regole categorie" />
 
-    <div class="flex flex-col space-y-6 p-4">
+    <div class="mx-auto flex w-full max-w-[64rem] flex-col space-y-6 p-4">
         <Heading
             title="Regole categorie"
             description="Ogni volta che categorizzi manualmente una transazione, il sistema crea o rinforza una regola per riconoscere automaticamente lo stesso merchant la volta successiva"

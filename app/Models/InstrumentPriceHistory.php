@@ -13,10 +13,13 @@ use Illuminate\Support\Carbon;
  * @property string $isin
  * @property Carbon $price_date
  * @property string $close_price
+ * @property string|null $open_price
+ * @property string|null $high_price
+ * @property string|null $low_price
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['isin', 'price_date', 'close_price'])]
+#[Fillable(['isin', 'price_date', 'close_price', 'open_price', 'high_price', 'low_price'])]
 class InstrumentPriceHistory extends Model
 {
     /** @use HasFactory<InstrumentPriceHistoryFactory> */
@@ -34,6 +37,9 @@ class InstrumentPriceHistory extends Model
         return [
             'price_date' => 'date',
             'close_price' => 'decimal:6',
+            'open_price' => 'decimal:6',
+            'high_price' => 'decimal:6',
+            'low_price' => 'decimal:6',
         ];
     }
 }

@@ -88,7 +88,7 @@ function destroyCategory(category: TransactionCategory) {
 <template>
     <Head title="Categorie" />
 
-    <div class="flex flex-col space-y-6 p-4">
+    <div class="mx-auto flex w-full max-w-[64rem] flex-col space-y-6 p-4">
         <Heading
             title="Categorie"
             description="Le categorie di sistema sono condivise e non modificabili; quelle che crei tu sono completamente tue"

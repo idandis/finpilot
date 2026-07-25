@@ -34,7 +34,7 @@ const accountTypeLabels: Record<string, string> = {
 <template>
     <Head title="Nuovo conto" />
 
-    <div class="flex flex-col space-y-6 p-4">
+    <div class="mx-auto flex w-full max-w-[64rem] flex-col space-y-6 p-4">
         <Heading
             title="Nuovo conto"
             description="Registra un nuovo conto o carta"

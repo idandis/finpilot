@@ -40,4 +40,8 @@ return [
         'daily_call_budget' => env('EODHD_DAILY_CALL_BUDGET', 18),
     ],
 
+    'fmp' => [
+        'api_key' => env('FMP_API_KEY'),
+    ],
+
 ];

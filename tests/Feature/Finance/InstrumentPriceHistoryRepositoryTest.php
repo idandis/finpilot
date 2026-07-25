@@ -56,6 +56,64 @@ class InstrumentPriceHistoryRepositoryTest extends TestCase
         $this->assertNotNull($record->fresh()->history_backfilled_at);
     }
 
+    public function test_backfill_stores_ohlc_alongside_the_close_for_the_candlestick_chart()
+    {
+        $record = InstrumentPrice::factory()->create([
+            'isin' => 'IE00BK5BQT80',
+            'code' => 'VWCE',
+            'exchange' => 'XETRA',
+            'history_backfilled_at' => null,
+        ]);
+
+        $provider = new FakeInstrumentHistoryProvider(history: [
+            new FetchedPrice(price: 105.32, date: Carbon::parse('2026-07-22'), open: 103.0, high: 106.0, low: 102.5),
+        ]);
+
+        $repository = new InstrumentPriceHistoryRepository($provider);
+        $repository->backfill($record, $this->historyFrom(), $this->historyTo());
+
+        $stored = InstrumentPriceHistory::query()->where('isin', 'IE00BK5BQT80')->first();
+        $this->assertEquals(103.0, $stored->open_price);
+        $this->assertEquals(106.0, $stored->high_price);
+        $this->assertEquals(102.5, $stored->low_price);
+        $this->assertEquals(105.32, $stored->close_price);
+    }
+
+    public function test_backfill_updates_existing_rows_for_the_same_date_instead_of_colliding()
+    {
+        // Simulates re-running backfill (e.g. after resetting the flag to
+        // pick up a newly-added column) when rows for these dates already
+        // exist from a previous run - a regression test for a real bug
+        // where a raw string date match missed the already-stored row
+        // (SQLite persists the date-cast column with a time suffix) and
+        // re-insertion collided with the unique index instead of updating.
+        InstrumentPriceHistory::factory()->create([
+            'isin' => 'IE00BK5BQT80',
+            'price_date' => '2026-07-20',
+            'close_price' => 100.0,
+            'open_price' => null,
+        ]);
+
+        $record = InstrumentPrice::factory()->create([
+            'isin' => 'IE00BK5BQT80',
+            'code' => 'VWCE',
+            'exchange' => 'XETRA',
+            'history_backfilled_at' => null,
+        ]);
+
+        $provider = new FakeInstrumentHistoryProvider(history: [
+            new FetchedPrice(price: 105.0, date: Carbon::parse('2026-07-20'), open: 101.0, high: 106.0, low: 99.5),
+        ]);
+
+        $repository = new InstrumentPriceHistoryRepository($provider);
+        $repository->backfill($record, $this->historyFrom(), $this->historyTo());
+
+        $this->assertDatabaseCount('instrument_price_history', 1);
+        $stored = InstrumentPriceHistory::query()->where('isin', 'IE00BK5BQT80')->first();
+        $this->assertEquals(105.0, $stored->close_price);
+        $this->assertEquals(101.0, $stored->open_price);
+    }
+
     public function test_it_does_nothing_when_already_backfilled()
     {
         $record = InstrumentPrice::factory()->create([
@@ -150,6 +208,11 @@ class FakeInstrumentHistoryProvider implements MarketPriceProvider
     }
 
     public function fetchNews(string $code, string $exchange): ?array
+    {
+        return null;
+    }
+
+    public function fetchFundamentals(string $symbol): ?array
     {
         return null;
     }

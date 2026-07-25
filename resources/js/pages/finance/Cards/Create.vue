@@ -36,7 +36,7 @@ const cardTypeLabels: Record<string, string> = {
 <template>
     <Head title="Nuova carta" />
 
-    <div class="flex flex-col space-y-6 p-4">
+    <div class="mx-auto flex w-full max-w-[64rem] flex-col space-y-6 p-4">
         <Heading
             title="Nuova carta"
             description="Crea una carta, con o senza un conto collegato"
