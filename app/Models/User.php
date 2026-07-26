@@ -128,4 +128,12 @@ class User extends Authenticatable implements PasskeyUser
     {
         return $this->hasMany(Meal::class);
     }
+
+    /**
+     * @return HasMany<Dish, $this>
+     */
+    public function dishes(): HasMany
+    {
+        return $this->hasMany(Dish::class);
+    }
 }

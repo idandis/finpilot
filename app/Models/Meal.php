@@ -16,11 +16,12 @@ use Illuminate\Support\Carbon;
  * @property string|null $description
  * @property Carbon $meal_date
  * @property string $meal_type
+ * @property string|null $category
  * @property int $position
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['title', 'description', 'meal_date', 'meal_type', 'position'])]
+#[Fillable(['title', 'description', 'meal_date', 'meal_type', 'category', 'position'])]
 class Meal extends Model
 {
     /** @use HasFactory<MealFactory> */

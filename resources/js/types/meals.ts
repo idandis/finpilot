@@ -6,5 +6,6 @@ export type Meal = {
     description: string | null;
     meal_date: string;
     meal_type: MealType;
+    category: string | null;
     position: number;
 };

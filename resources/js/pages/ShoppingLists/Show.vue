@@ -97,6 +97,11 @@ function toggleItem(item: ShoppingListItem) {
 function destroyItem(item: ShoppingListItem) {
     router.delete(ShoppingListItemController.destroy(item.id).url, { preserveScroll: true });
 }
+
+// Controlled (not left to the native form reset) so it keeps the last
+// category picked across additions - handy when adding several products
+// of the same kind in a row.
+const selectedCategory = ref(Object.keys(props.categories)[0]);
 </script>
 
 <template>
@@ -120,6 +125,7 @@ function destroyItem(item: ShoppingListItem) {
                 <Label for="category">Categoria</Label>
                 <select
                     id="category"
+                    v-model="selectedCategory"
                     name="category"
                     required
                     class="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"

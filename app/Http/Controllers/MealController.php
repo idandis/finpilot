@@ -5,11 +5,15 @@ namespace App\Http\Controllers;
 use App\Http\Requests\Meals\MealMoveRequest;
 use App\Http\Requests\Meals\MealStoreRequest;
 use App\Models\Meal;
+use App\Services\Meals\DishCategories;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\Response as HttpResponse;
 
 class MealController extends Controller
 {
@@ -25,24 +29,65 @@ class MealController extends Controller
         $weekStart = $this->resolveWeekStart($request->query('date'), $today);
         $weekEnd = $weekStart->copy()->addDays(6);
 
-        $meals = $request->user()->meals()
-            ->whereBetween('meal_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
-            ->orderBy('position')
-            ->get(['id', 'title', 'description', 'meal_date', 'meal_type', 'position'])
+        $meals = $this->weekMeals($request, $weekStart, $weekEnd)
             ->map(fn (Meal $meal) => [
                 'id' => $meal->id,
                 'title' => $meal->title,
                 'description' => $meal->description,
                 'meal_date' => $meal->meal_date->toDateString(),
                 'meal_type' => $meal->meal_type,
+                'category' => $meal->category,
                 'position' => $meal->position,
             ]);
+
+        $dishes = $request->user()->dishes()->orderBy('name')->get(['id', 'name', 'description', 'category']);
 
         return Inertia::render('Meals/Index', [
             'weekStart' => $weekStart->toDateString(),
             'today' => $today->toDateString(),
             'meals' => $meals,
+            'dishes' => $dishes,
+            'dishCategories' => DishCategories::ALL,
         ]);
+    }
+
+    /**
+     * Exports the same week shown on the board as a printable PDF, one
+     * section per day split into Pranzo/Cena.
+     */
+    public function pdf(Request $request): HttpResponse
+    {
+        $weekStart = $this->resolveWeekStart($request->query('date'), Carbon::today());
+        $weekEnd = $weekStart->copy()->addDays(6);
+
+        $meals = $this->weekMeals($request, $weekStart, $weekEnd);
+
+        $days = collect(range(0, 6))->map(fn (int $offset) => [
+            'date' => $weekStart->copy()->addDays($offset),
+            'lunch' => $meals->filter(fn (Meal $meal) => $meal->meal_date->isSameDay($weekStart->copy()->addDays($offset)) && $meal->meal_type === 'lunch')->values(),
+            'dinner' => $meals->filter(fn (Meal $meal) => $meal->meal_date->isSameDay($weekStart->copy()->addDays($offset)) && $meal->meal_type === 'dinner')->values(),
+        ]);
+
+        $pdf = Pdf::loadView('meals.pdf', [
+            'weekStart' => $weekStart,
+            'weekEnd' => $weekEnd,
+            'days' => $days,
+            'dishCategories' => DishCategories::ALL,
+        ]);
+
+        return $pdf->download("pasti-settimana-{$weekStart->toDateString()}.pdf");
+    }
+
+    /**
+     * @return Collection<int, Meal>
+     */
+    private function weekMeals(Request $request, Carbon $weekStart, Carbon $weekEnd): Collection
+    {
+        return $request->user()->meals()
+            ->whereDate('meal_date', '>=', $weekStart)
+            ->whereDate('meal_date', '<=', $weekEnd)
+            ->orderBy('position')
+            ->get(['id', 'title', 'description', 'meal_date', 'meal_type', 'category', 'position']);
     }
 
     /**

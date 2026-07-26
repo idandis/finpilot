@@ -1,4 +1,5 @@
 export * from './auth';
+export * from './dishes';
 export * from './finance';
 export * from './meals';
 export * from './navigation';

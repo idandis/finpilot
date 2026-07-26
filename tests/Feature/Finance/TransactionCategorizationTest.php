@@ -103,7 +103,7 @@ class TransactionCategorizationTest extends TestCase
             'is_active' => false,
         ]);
 
-        $result = (new TransactionCategorizer())->categorize('NETFLIX.COM', $user->id);
+        $result = (new TransactionCategorizer)->categorize('NETFLIX.COM', $user->id);
 
         $this->assertNull($result);
     }

@@ -2,10 +2,12 @@
 
 namespace Tests\Feature\Meals;
 
+use App\Models\Dish;
 use App\Models\Meal;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Smalot\PdfParser\Parser;
 use Tests\TestCase;
 
 class MealControllerTest extends TestCase
@@ -88,6 +90,22 @@ class MealControllerTest extends TestCase
         $response->assertInertia(fn ($page) => $page->has('meals', 1));
     }
 
+    public function test_the_board_exposes_the_users_dishes_and_the_available_categories()
+    {
+        $user = User::factory()->create();
+        Dish::factory()->create(['user_id' => $user->id, 'name' => 'Pizza', 'category' => 'pasta_riso']);
+        Dish::factory()->create(['user_id' => User::factory(), 'name' => 'Non mio']);
+
+        $response = $this->actingAs($user)->get(route('meals.index'));
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->has('dishes', 1)
+            ->where('dishes.0.name', 'Pizza')
+            ->has('dishCategories.pasta_riso')
+        );
+    }
+
     public function test_a_user_can_create_a_meal()
     {
         $user = User::factory()->create();
@@ -121,6 +139,50 @@ class MealControllerTest extends TestCase
 
         $response->assertRedirect();
         $this->assertDatabaseHas('meals', ['title' => 'Solo titolo', 'description' => null]);
+    }
+
+    public function test_a_meal_can_be_created_with_a_category()
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->post(route('meals.store'), [
+            'title' => 'Bistecca ai ferri',
+            'meal_date' => today()->toDateString(),
+            'meal_type' => 'dinner',
+            'category' => 'carne',
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('meals', ['title' => 'Bistecca ai ferri', 'category' => 'carne']);
+    }
+
+    public function test_an_empty_category_is_treated_as_none()
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->post(route('meals.store'), [
+            'title' => 'Senza categoria',
+            'meal_date' => today()->toDateString(),
+            'meal_type' => 'lunch',
+            'category' => '',
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('meals', ['title' => 'Senza categoria', 'category' => null]);
+    }
+
+    public function test_creating_a_meal_with_an_invalid_category_fails_validation()
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->post(route('meals.store'), [
+            'title' => 'Piatto misterioso',
+            'meal_date' => today()->toDateString(),
+            'meal_type' => 'lunch',
+            'category' => 'non-existent',
+        ]);
+
+        $response->assertSessionHasErrors('category');
     }
 
     public function test_creating_a_meal_requires_a_title_date_and_valid_type()
@@ -233,5 +295,54 @@ class MealControllerTest extends TestCase
 
         $response->assertForbidden();
         $this->assertDatabaseHas('meals', ['id' => $meal->id]);
+    }
+
+    public function test_guests_cannot_download_the_pdf()
+    {
+        $response = $this->get(route('meals.pdf'));
+
+        $response->assertRedirect(route('login'));
+    }
+
+    public function test_a_user_can_download_a_pdf_of_the_current_week()
+    {
+        $user = User::factory()->create();
+        $monday = today()->startOfWeek(Carbon::MONDAY);
+        Meal::factory()->create(['user_id' => $user->id, 'meal_date' => $monday, 'meal_type' => 'lunch', 'title' => 'Pasta al pomodoro', 'category' => 'pasta_riso']);
+
+        $response = $this->actingAs($user)->get(route('meals.pdf'));
+
+        $response->assertOk();
+        $response->assertHeader('Content-Type', 'application/pdf');
+    }
+
+    public function test_the_pdf_only_includes_the_requested_weeks_meals()
+    {
+        $user = User::factory()->create();
+        $monday = today()->startOfWeek(Carbon::MONDAY);
+        Meal::factory()->create(['user_id' => $user->id, 'meal_date' => $monday, 'title' => 'Questa settimana']);
+        Meal::factory()->create(['user_id' => $user->id, 'meal_date' => $monday->copy()->subWeek(), 'title' => 'Settimana scorsa']);
+
+        $response = $this->actingAs($user)->get(route('meals.pdf'));
+
+        $response->assertOk();
+
+        $text = (new Parser)->parseContent($response->getContent())->getText();
+        $this->assertStringContainsString('Questa settimana', $text);
+        $this->assertStringNotContainsString('Settimana scorsa', $text);
+    }
+
+    public function test_a_user_only_sees_their_own_meals_in_the_pdf()
+    {
+        $user = User::factory()->create();
+        $monday = today()->startOfWeek(Carbon::MONDAY);
+        Meal::factory()->create(['user_id' => User::factory(), 'meal_date' => $monday, 'title' => 'Pasto di un altro']);
+
+        $response = $this->actingAs($user)->get(route('meals.pdf'));
+
+        $response->assertOk();
+
+        $text = (new Parser)->parseContent($response->getContent())->getText();
+        $this->assertStringNotContainsString('Pasto di un altro', $text);
     }
 }

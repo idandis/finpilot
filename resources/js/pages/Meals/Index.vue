@@ -1,20 +1,25 @@
 <script setup lang="ts">
 import { Form, Head, router } from '@inertiajs/vue3';
-import { ChevronLeft, ChevronRight, Plus, Trash2 } from '@lucide/vue';
+import { ChevronLeft, ChevronRight, FileDown, Plus, Trash2 } from '@lucide/vue';
 import { computed, reactive, ref, watch } from 'vue';
+import DishController from '@/actions/App/Http/Controllers/DishController';
 import MealController from '@/actions/App/Http/Controllers/MealController';
 import InputError from '@/components/InputError.vue';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import * as dishRoutes from '@/routes/dishes';
 import * as mealRoutes from '@/routes/meals';
-import type { Meal, MealType } from '@/types';
+import type { Dish, DishCategories, Meal, MealType } from '@/types';
 
 const props = defineProps<{
     weekStart: string;
     today: string;
     meals: Meal[];
+    dishes: Dish[];
+    dishCategories: DishCategories;
 }>();
 
 defineOptions({
@@ -95,6 +100,7 @@ function slotKey(date: string, type: MealType) {
 }
 
 const draggingMealId = ref<number | null>(null);
+const draggingDishId = ref<number | null>(null);
 const dragOverKey = ref<string | null>(null);
 
 function onDragStart(meal: Meal, event: DragEvent) {
@@ -111,6 +117,20 @@ function onDragEnd() {
     dragOverKey.value = null;
 }
 
+function onDishDragStart(dish: Dish, event: DragEvent) {
+    draggingDishId.value = dish.id;
+    event.dataTransfer?.setData('text/plain', `dish:${dish.id}`);
+
+    if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = 'copy';
+    }
+}
+
+function onDishDragEnd() {
+    draggingDishId.value = null;
+    dragOverKey.value = null;
+}
+
 function onDragOver(date: string, type: MealType, event: DragEvent) {
     event.preventDefault();
     dragOverKey.value = slotKey(date, type);
@@ -118,8 +138,28 @@ function onDragOver(date: string, type: MealType, event: DragEvent) {
 
 function onDrop(date: string, type: MealType, event: DragEvent) {
     event.preventDefault();
-    const mealId = draggingMealId.value;
     dragOverKey.value = null;
+
+    // Dropping a preconfigured dish creates a new meal from it - the dish
+    // itself stays in the library below so it can be reused on other days.
+    if (draggingDishId.value !== null) {
+        const dish = props.dishes.find((candidate) => candidate.id === draggingDishId.value);
+        draggingDishId.value = null;
+
+        if (!dish) {
+            return;
+        }
+
+        router.post(
+            mealRoutes.store.url(),
+            { title: dish.name, description: dish.description ?? '', meal_date: date, meal_type: type, category: dish.category },
+            { preserveScroll: true, preserveState: true },
+        );
+
+        return;
+    }
+
+    const mealId = draggingMealId.value;
     draggingMealId.value = null;
 
     if (mealId === null) {
@@ -143,6 +183,44 @@ function destroyMeal(meal: Meal) {
         router.delete(mealRoutes.destroy(meal.id).url, { preserveScroll: true });
     }
 }
+
+const groupedDishes = computed(() =>
+    Object.entries(props.dishCategories)
+        .map(([key, label]) => ({
+            key,
+            label,
+            dishes: props.dishes.filter((dish) => dish.category === key),
+        }))
+        .filter((group) => group.dishes.length > 0),
+);
+
+// How many times each category appears among this week's meals - a quick
+// "quanta carne/pesce ecc. mangio questa settimana" glance above the board.
+const weeklyCategoryCounts = computed(() => {
+    const counts = new Map<string, number>();
+
+    for (const meal of localMeals) {
+        if (meal.category) {
+            counts.set(meal.category, (counts.get(meal.category) ?? 0) + 1);
+        }
+    }
+
+    return Object.entries(props.dishCategories)
+        .map(([key, label]) => ({ key, label, count: counts.get(key) ?? 0 }))
+        .filter((entry) => entry.count > 0);
+});
+
+function destroyDish(dish: Dish) {
+    if (confirm(`Eliminare il piatto "${dish.name}" dall'elenco?`)) {
+        router.delete(dishRoutes.destroy(dish.id).url, { preserveScroll: true });
+    }
+}
+
+function categoryLabel(category: string | null) {
+    return category ? (props.dishCategories[category] ?? category) : null;
+}
+
+const isAddDishOpen = ref(false);
 
 const isAddMealOpen = ref(false);
 const addMealTarget = ref<{ date: string; label: string; type: MealType; typeLabel: string } | null>(null);
@@ -171,6 +249,19 @@ function openAddDialog(date: string, day: { label: string }, type: MealType, typ
                     <Button v-if="!isCurrentWeek" variant="ghost" size="sm" @click="goToWeek(today)">Torna a questa settimana</Button>
                 </div>
             </div>
+            <Button variant="outline" class="shrink-0" as-child>
+                <a :href="mealRoutes.pdf.url({ query: { date: weekStart } })">
+                    <FileDown />
+                    Crea PDF
+                </a>
+            </Button>
+        </div>
+
+        <div v-if="weeklyCategoryCounts.length > 0" class="flex flex-wrap items-center gap-2">
+            <Badge v-for="entry in weeklyCategoryCounts" :key="entry.key" variant="secondary" class="gap-1.5">
+                {{ entry.label }}
+                <span class="font-semibold">{{ entry.count }}</span>
+            </Badge>
         </div>
 
         <div class="-mx-4 snap-x snap-mandatory overflow-x-auto pb-2 sm:mx-0 sm:snap-none">
@@ -220,6 +311,9 @@ function openAddDialog(date: string, day: { label: string }, type: MealType, typ
                                 >
                                     <div class="min-w-0 flex-1">
                                         <p class="truncate font-medium">{{ meal.title }}</p>
+                                        <p v-if="meal.category" class="mt-0.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+                                            {{ categoryLabel(meal.category) }}
+                                        </p>
                                         <p v-if="meal.description" class="mt-0.5 line-clamp-2 text-xs whitespace-pre-line text-muted-foreground">
                                             {{ meal.description }}
                                         </p>
@@ -242,6 +336,101 @@ function openAddDialog(date: string, day: { label: string }, type: MealType, typ
                 </div>
             </div>
         </div>
+
+        <div class="flex flex-col gap-4">
+            <div class="flex items-center justify-between gap-4">
+                <div class="space-y-0.5">
+                    <h3 class="text-lg font-semibold tracking-tight">Piatti preconfigurati</h3>
+                    <p class="text-sm text-muted-foreground">Trascina un piatto su un giorno per aggiungerlo: resta qui per essere riutilizzato.</p>
+                </div>
+                <Button size="sm" class="shrink-0" @click="isAddDishOpen = true">
+                    <Plus />
+                    Nuovo piatto
+                </Button>
+            </div>
+
+            <div v-if="groupedDishes.length === 0" class="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+                Nessun piatto ancora. Aggiungine uno per iniziare a comporre la settimana.
+            </div>
+
+            <div v-else class="-mx-4 overflow-x-auto pb-2 sm:mx-0">
+                <div class="flex gap-4 px-4 sm:grid sm:grid-flow-col sm:auto-cols-[17rem] sm:px-0">
+                    <div v-for="group in groupedDishes" :key="group.key" class="w-[17rem] shrink-0 rounded-xl bg-muted/40 p-4 sm:w-auto">
+                        <h4 class="mb-2 px-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">{{ group.label }}</h4>
+                        <div class="space-y-0.5">
+                            <div
+                                v-for="dish in group.dishes"
+                                :key="dish.id"
+                                draggable="true"
+                                class="group flex cursor-grab items-start gap-2 rounded-lg px-2 py-2 text-sm select-none hover:bg-background/60"
+                                :class="draggingDishId === dish.id ? 'opacity-40' : ''"
+                                @dragstart="onDishDragStart(dish, $event)"
+                                @dragend="onDishDragEnd"
+                            >
+                                <div class="min-w-0 flex-1">
+                                    <p class="truncate font-medium">{{ dish.name }}</p>
+                                    <p v-if="dish.description" class="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{{ dish.description }}</p>
+                                </div>
+                                <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    class="size-6 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
+                                    title="Elimina piatto"
+                                    @click="destroyDish(dish)"
+                                >
+                                    <Trash2 class="size-3.5" />
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <Dialog v-model:open="isAddDishOpen">
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Nuovo piatto</DialogTitle>
+                </DialogHeader>
+                <Form
+                    v-bind="DishController.store.form()"
+                    reset-on-success
+                    class="grid grid-cols-1 gap-4"
+                    v-slot="{ errors, processing }"
+                    @success="isAddDishOpen = false"
+                >
+                    <div class="grid gap-2">
+                        <Label for="dish-name">Nome</Label>
+                        <Input id="dish-name" name="name" placeholder="Es. Pizza" required autofocus />
+                        <InputError :message="errors.name" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="dish-description">Descrizione (opzionale)</Label>
+                        <textarea
+                            id="dish-description"
+                            name="description"
+                            rows="2"
+                            placeholder="Dettagli aggiuntivi..."
+                            class="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive w-full min-w-0 resize-y rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] md:text-sm"
+                        ></textarea>
+                        <InputError :message="errors.description" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="dish-category">Categoria</Label>
+                        <select
+                            id="dish-category"
+                            name="category"
+                            required
+                            class="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                        >
+                            <option v-for="(label, key) in dishCategories" :key="key" :value="key">{{ label }}</option>
+                        </select>
+                        <InputError :message="errors.category" />
+                    </div>
+                    <Button type="submit" :disabled="processing">Aggiungi piatto</Button>
+                </Form>
+            </DialogContent>
+        </Dialog>
 
         <Dialog v-model:open="isAddMealOpen">
             <DialogContent>
@@ -273,6 +462,18 @@ function openAddDialog(date: string, day: { label: string }, type: MealType, typ
                             class="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive w-full min-w-0 resize-y rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] md:text-sm"
                         ></textarea>
                         <InputError :message="errors.description" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="meal-category">Categoria (opzionale)</Label>
+                        <select
+                            id="meal-category"
+                            name="category"
+                            class="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                        >
+                            <option value="">Nessuna categoria</option>
+                            <option v-for="(label, key) in dishCategories" :key="key" :value="key">{{ label }}</option>
+                        </select>
+                        <InputError :message="errors.category" />
                     </div>
                     <Button type="submit" :disabled="processing">Aggiungi pasto</Button>
                 </Form>

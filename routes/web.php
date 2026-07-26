@@ -15,3 +15,4 @@ require __DIR__.'/passwords.php';
 require __DIR__.'/tasks.php';
 require __DIR__.'/shopping-lists.php';
 require __DIR__.'/meals.php';
+require __DIR__.'/dishes.php';

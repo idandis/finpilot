@@ -170,3 +170,28 @@
         @apply bg-background text-foreground;
     }
 }
+
+/* Scrollbar */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(236, 86, 47, 0.35) transparent;
+}
+
+/* Chrome / Safari / Edge */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(236, 86, 47, 0.35);
+    border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(236, 86, 47, 0.65);
+}
+/* End Scrollbar */
