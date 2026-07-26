@@ -3,7 +3,9 @@
 namespace Tests\Feature\Meals;
 
 use App\Models\Dish;
+use App\Models\DishIngredient;
 use App\Models\Meal;
+use App\Models\ShoppingList;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -344,5 +346,125 @@ class MealControllerTest extends TestCase
 
         $text = (new Parser)->parseContent($response->getContent())->getText();
         $this->assertStringNotContainsString('Pasto di un altro', $text);
+    }
+
+    public function test_creating_a_meal_from_a_dish_persists_the_dish_id()
+    {
+        $user = User::factory()->create();
+        $dish = Dish::factory()->create(['user_id' => $user->id]);
+
+        $response = $this->actingAs($user)->post(route('meals.store'), [
+            'title' => $dish->name,
+            'meal_date' => today()->toDateString(),
+            'meal_type' => 'lunch',
+            'dish_id' => $dish->id,
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('meals', ['title' => $dish->name, 'dish_id' => $dish->id]);
+    }
+
+    public function test_a_user_cannot_link_a_meal_to_another_users_dish()
+    {
+        $user = User::factory()->create();
+        $dish = Dish::factory()->create(['user_id' => User::factory()]);
+
+        $response = $this->actingAs($user)->post(route('meals.store'), [
+            'title' => 'Piatto altrui',
+            'meal_date' => today()->toDateString(),
+            'meal_type' => 'lunch',
+            'dish_id' => $dish->id,
+        ]);
+
+        $response->assertSessionHasErrors('dish_id');
+    }
+
+    public function test_guests_cannot_generate_a_shopping_list()
+    {
+        $response = $this->post(route('meals.generate-shopping-list'));
+
+        $response->assertRedirect(route('login'));
+    }
+
+    public function test_generating_a_shopping_list_uses_the_dishs_ingredients()
+    {
+        $user = User::factory()->create();
+        $monday = today()->startOfWeek(Carbon::MONDAY);
+        $dish = Dish::factory()->create(['user_id' => $user->id, 'name' => 'Pasta al pomodoro']);
+        DishIngredient::factory()->create(['dish_id' => $dish->id, 'name' => 'Pasta', 'category' => 'pasta_riso_cereali']);
+        DishIngredient::factory()->create(['dish_id' => $dish->id, 'name' => 'Pomodoro', 'category' => 'verdura']);
+        Meal::factory()->create(['user_id' => $user->id, 'dish_id' => $dish->id, 'meal_date' => $monday, 'title' => $dish->name]);
+
+        $response = $this->actingAs($user)->post(route('meals.generate-shopping-list'));
+
+        $list = ShoppingList::query()->where('user_id', $user->id)->firstOrFail();
+        $response->assertRedirect(route('shopping-lists.show', $list));
+        $this->assertDatabaseHas('shopping_list_items', ['shopping_list_id' => $list->id, 'name' => 'Pasta', 'category' => 'pasta_riso_cereali']);
+        $this->assertDatabaseHas('shopping_list_items', ['shopping_list_id' => $list->id, 'name' => 'Pomodoro', 'category' => 'verdura']);
+    }
+
+    public function test_generating_a_shopping_list_falls_back_to_the_meal_title_without_a_dish()
+    {
+        $user = User::factory()->create();
+        $monday = today()->startOfWeek(Carbon::MONDAY);
+        Meal::factory()->create(['user_id' => $user->id, 'dish_id' => null, 'meal_date' => $monday, 'title' => 'Avanzi di ieri', 'category' => null]);
+
+        $response = $this->actingAs($user)->post(route('meals.generate-shopping-list'));
+
+        $list = ShoppingList::query()->where('user_id', $user->id)->firstOrFail();
+        $response->assertRedirect(route('shopping-lists.show', $list));
+        $this->assertDatabaseHas('shopping_list_items', ['shopping_list_id' => $list->id, 'name' => 'Avanzi di ieri', 'category' => 'altro']);
+    }
+
+    public function test_generating_a_shopping_list_maps_a_meals_own_carne_category_to_the_grocery_one()
+    {
+        $user = User::factory()->create();
+        $monday = today()->startOfWeek(Carbon::MONDAY);
+        Meal::factory()->create(['user_id' => $user->id, 'dish_id' => null, 'meal_date' => $monday, 'title' => 'Bistecca', 'category' => 'carne']);
+
+        $response = $this->actingAs($user)->post(route('meals.generate-shopping-list'));
+
+        $list = ShoppingList::query()->where('user_id', $user->id)->firstOrFail();
+        $response->assertRedirect(route('shopping-lists.show', $list));
+        $this->assertDatabaseHas('shopping_list_items', ['shopping_list_id' => $list->id, 'name' => 'Bistecca', 'category' => 'carne']);
+    }
+
+    public function test_generating_a_shopping_list_deduplicates_repeated_ingredients()
+    {
+        $user = User::factory()->create();
+        $monday = today()->startOfWeek(Carbon::MONDAY);
+        $dish = Dish::factory()->create(['user_id' => $user->id, 'name' => 'Pasta al pomodoro']);
+        DishIngredient::factory()->create(['dish_id' => $dish->id, 'name' => 'Pasta', 'category' => 'pasta_riso_cereali']);
+        Meal::factory()->create(['user_id' => $user->id, 'dish_id' => $dish->id, 'meal_date' => $monday, 'meal_type' => 'lunch', 'title' => $dish->name]);
+        Meal::factory()->create(['user_id' => $user->id, 'dish_id' => $dish->id, 'meal_date' => $monday->copy()->addDays(3), 'meal_type' => 'dinner', 'title' => $dish->name]);
+
+        $this->actingAs($user)->post(route('meals.generate-shopping-list'));
+
+        $list = ShoppingList::query()->where('user_id', $user->id)->firstOrFail();
+        $this->assertSame(1, $list->items()->where('name', 'Pasta')->count());
+    }
+
+    public function test_generating_a_shopping_list_does_nothing_for_an_empty_week()
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->post(route('meals.generate-shopping-list'));
+
+        $response->assertRedirect();
+        $this->assertDatabaseCount('shopping_lists', 0);
+    }
+
+    public function test_generating_a_shopping_list_only_includes_the_users_own_meals()
+    {
+        $user = User::factory()->create();
+        $monday = today()->startOfWeek(Carbon::MONDAY);
+        Meal::factory()->create(['user_id' => User::factory(), 'dish_id' => null, 'meal_date' => $monday, 'title' => 'Pasto di un altro', 'category' => null]);
+        Meal::factory()->create(['user_id' => $user->id, 'dish_id' => null, 'meal_date' => $monday, 'title' => 'Il mio pasto', 'category' => null]);
+
+        $this->actingAs($user)->post(route('meals.generate-shopping-list'));
+
+        $list = ShoppingList::query()->where('user_id', $user->id)->firstOrFail();
+        $this->assertDatabaseHas('shopping_list_items', ['shopping_list_id' => $list->id, 'name' => 'Il mio pasto']);
+        $this->assertDatabaseMissing('shopping_list_items', ['shopping_list_id' => $list->id, 'name' => 'Pasto di un altro']);
     }
 }

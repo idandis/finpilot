@@ -8,23 +8,23 @@ use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class DishStoreRequest extends FormRequest
+class DishUpdateRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
      */
     public function authorize(): bool
     {
-        return true;
+        return $this->route('dish')->user_id === $this->user()->id;
     }
 
     /**
      * Get the validation rules that apply to the request.
      *
-     * Ingredient rows are left lenient (nullable) rather than required: the
-     * "Nuovo piatto" dialog lets the user add/remove rows freely, and a
-     * blank row abandoned mid-edit shouldn't block saving the dish - the
-     * controller filters out any row without a name before persisting.
+     * Ingredient rows are left lenient (nullable), same as on creation: a
+     * blank row abandoned mid-edit shouldn't block saving - the controller
+     * filters out any row without a name before persisting, and replaces
+     * the dish's full ingredient list with whatever remains.
      *
      * @return array<string, ValidationRule|array<mixed>|string>
      */

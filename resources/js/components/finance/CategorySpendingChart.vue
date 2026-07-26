@@ -8,10 +8,12 @@ const props = withDefaults(
         currency: string;
         emptyMessage?: string;
         centerLabel?: string;
+        size?: 'md' | 'lg';
     }>(),
     {
         emptyMessage: 'Nessuna spesa da mostrare per questo mese.',
         centerLabel: 'Uscite',
+        size: 'md',
     },
 );
 
@@ -67,7 +69,10 @@ function formatCurrency(value: number) {
     </div>
 
     <div v-else class="flex flex-col gap-6 @lg:flex-row @lg:items-center">
-        <div class="relative mx-auto aspect-square w-40 shrink-0 @lg:w-48">
+        <div
+            class="relative mx-auto aspect-square shrink-0"
+            :class="size === 'lg' ? 'w-56 @lg:w-72' : 'w-40 @lg:w-48'"
+        >
             <svg viewBox="0 0 200 200" class="size-full -rotate-90">
                 <circle
                     v-for="segment in segments"
@@ -105,7 +110,7 @@ function formatCurrency(value: number) {
                 <span class="text-xs text-muted-foreground">{{
                     centerLabel
                 }}</span>
-                <span class="text-lg font-semibold">{{
+                <span class="font-semibold" :class="size === 'lg' ? 'text-2xl' : 'text-lg'">{{
                     formatCurrency(total)
                 }}</span>
             </div>

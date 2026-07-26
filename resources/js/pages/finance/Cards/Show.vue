@@ -191,7 +191,7 @@ function destroyAllTransactions() {
             </div>
 
             <div class="space-y-6">
-                <div class="flex items-center justify-between">
+                <div class="flex flex-wrap items-center justify-between gap-4">
                     <Heading title="Movimenti" :description="card.name" />
                     <div class="flex items-center gap-2">
                         <Button
@@ -201,7 +201,7 @@ function destroyAllTransactions() {
                         >
                             <ChevronLeft />
                         </Button>
-                        <span class="min-w-36 text-center text-sm font-medium">
+                        <span class="min-w-28 text-center text-sm font-medium sm:min-w-36">
                             {{ monthLabel }}
                         </span>
                         <Button
@@ -214,7 +214,7 @@ function destroyAllTransactions() {
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-4 sm:grid-cols-2">
+                <div class="grid grid-cols-2 gap-4">
                     <div class="rounded-lg border p-4">
                         <p class="text-xs text-muted-foreground">Entrate</p>
                         <p class="text-lg font-semibold text-green-600">
@@ -452,7 +452,7 @@ function destroyAllTransactions() {
 
                         <div
                             v-if="cardTransactionsCount > 0"
-                            class="flex items-center justify-between rounded-lg border border-destructive/30 p-4"
+                            class="flex flex-col items-start gap-4 rounded-lg border border-destructive/30 p-4 sm:flex-row sm:items-center sm:justify-between"
                         >
                             <div class="space-y-0.5">
                                 <p class="text-sm font-medium">
@@ -467,6 +467,7 @@ function destroyAllTransactions() {
                             <Button
                                 variant="destructive"
                                 size="sm"
+                                class="w-full shrink-0 sm:w-auto"
                                 @click="destroyAllTransactions"
                             >
                                 Elimina movimenti carta

@@ -157,17 +157,23 @@ const selectedCategory = ref(Object.keys(props.categories)[0]);
                         v-for="item in group.items"
                         :key="item.id"
                         draggable="true"
-                        class="group flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2 py-2 text-sm select-none hover:bg-background/60"
+                        class="group flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm select-none hover:bg-background/60"
                         :class="draggingItemId === item.id ? 'opacity-40' : ''"
                         @click="toggleItem(item)"
                         @dragstart="onDragStart(item, $event)"
                         @dragend="onDragEnd"
                     >
-                        <span
-                            class="min-w-0 truncate"
-                            :class="item.purchased ? 'text-muted-foreground line-through' : ''"
-                        >
-                            {{ item.name }}
+                        <span class="flex min-w-0 items-center gap-1.5">
+                            <span
+                                class="size-2 shrink-0 rounded-full"
+                                :class="item.purchased ? 'bg-muted-foreground/50' : 'bg-primary/70'"
+                            />
+                            <span
+                                class="min-w-0 truncate"
+                                :class="item.purchased ? 'text-muted-foreground line-through' : ''"
+                            >
+                                {{ item.name }}
+                            </span>
                         </span>
                         <Button
                             variant="ghost"

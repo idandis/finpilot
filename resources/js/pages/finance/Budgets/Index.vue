@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import CategorySpendingChart from '@/components/finance/CategorySpendingChart.vue';
 import Heading from '@/components/Heading.vue';
 import {
     Table,
@@ -11,9 +12,9 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import * as budgetRoutes from '@/routes/budgets';
-import type { Card, CategoryBudgetRow } from '@/types';
+import type { Card, CategoryBreakdownItem, CategoryBudgetRow } from '@/types';
 
 const props = defineProps<{
     budgets: CategoryBudgetRow[];
@@ -27,6 +28,7 @@ const emptyBudgets = computed(() =>
     props.budgets.filter((row) => row.monthly_budget === null),
 );
 
+const mainTab = ref<'elenco' | 'composizione'>('elenco');
 const activeTab = ref<'set' | 'empty'>('set');
 const cardFilter = ref<'all' | 'none' | string>('all');
 
@@ -49,7 +51,10 @@ const visibleBudgets = computed(() =>
 );
 
 const visibleTotal = computed(() =>
-    visibleBudgets.value.reduce((sum, row) => sum + (row.monthly_budget ?? 0), 0),
+    visibleBudgets.value.reduce(
+        (sum, row) => sum + (row.monthly_budget ?? 0),
+        0,
+    ),
 );
 
 const totalLabel = computed(() => {
@@ -65,6 +70,30 @@ const totalLabel = computed(() => {
 
     return card ? `Totale · ${card.name}` : 'Totale';
 });
+
+// Independent of the "Impostati"/"Da impostare" filter above - the
+// composition only ever makes sense for budgets that actually have an
+// amount set, regardless of which sub-tab is active.
+const budgetComposition = computed<CategoryBreakdownItem[]>(() =>
+    setBudgets.value
+        .filter((row) => {
+            if (cardFilter.value === 'all') {
+                return true;
+            }
+
+            if (cardFilter.value === 'none') {
+                return row.card_id === null;
+            }
+
+            return String(row.card_id) === cardFilter.value;
+        })
+        .map((row) => ({
+            category_id: row.category_id,
+            name: row.name,
+            color: row.color,
+            amount: row.monthly_budget ?? 0,
+        })),
+);
 
 defineOptions({
     layout: {
@@ -162,145 +191,181 @@ function saveBudget(row: CategoryBudgetRow) {
             description="Imposta quanto vorresti spendere al mese per ciascuna categoria. Il confronto con la spesa reale arriva in un secondo momento."
         />
 
-        <div class="flex flex-wrap items-center justify-between gap-4">
-            <Tabs v-model="activeTab">
+        <Tabs v-model="mainTab">
+            <div class="flex flex-wrap items-center justify-between gap-4">
                 <TabsList>
-                    <TabsTrigger value="set"
-                        >Impostati ({{ setBudgets.length }})</TabsTrigger
-                    >
-                    <TabsTrigger value="empty"
-                        >Da impostare ({{ emptyBudgets.length }})</TabsTrigger
-                    >
+                    <TabsTrigger value="elenco">Elenco</TabsTrigger>
+                    <TabsTrigger value="composizione">Composizione</TabsTrigger>
                 </TabsList>
-            </Tabs>
 
-            <div class="grid gap-2">
-                <label for="card-filter" class="sr-only">Filtra per carta</label>
-                <select
-                    id="card-filter"
-                    v-model="cardFilter"
-                    class="h-9 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                >
-                    <option value="all">Tutte le carte</option>
-                    <option value="none">Nessuna carta</option>
-                    <option v-for="card in cards" :key="card.id" :value="String(card.id)">
-                        {{ card.name }}
-                    </option>
-                </select>
-            </div>
-        </div>
-
-        <Table>
-            <TableHeader>
-                <TableRow>
-                    <TableHead>Categoria</TableHead>
-                    <TableHead>Carta</TableHead>
-                    <TableHead class="text-right">Budget mensile</TableHead>
-                </TableRow>
-            </TableHeader>
-            <TableBody>
-                <TableRow v-if="visibleBudgets.length === 0">
-                    <TableCell
-                        colspan="3"
-                        class="text-center text-muted-foreground"
+                <div class="grid gap-2">
+                    <label for="card-filter" class="sr-only">Filtra per carta</label>
+                    <select
+                        id="card-filter"
+                        v-model="cardFilter"
+                        class="h-9 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                     >
-                        {{
-                            activeTab === 'set'
-                                ? 'Nessun budget impostato.'
-                                : 'Tutte le categorie hanno un budget impostato.'
-                        }}
-                    </TableCell>
-                </TableRow>
-                <TableRow v-for="row in visibleBudgets" :key="row.category_id">
-                    <TableCell>
-                        <span class="flex items-center gap-2">
-                            <span
-                                class="size-2.5 shrink-0 rounded-full"
-                                :style="{
-                                    backgroundColor: row.color ?? '#71717a',
-                                }"
-                            />
-                            {{ row.name }}
-                        </span>
-                    </TableCell>
-                    <TableCell>
-                        <select
-                            :value="row.card_id ?? ''"
-                            :disabled="row.monthly_budget === null"
-                            :title="
-                                row.monthly_budget === null
-                                    ? 'Imposta prima un budget mensile'
-                                    : 'Associa questo budget a una carta'
-                            "
-                            class="h-8 w-full max-w-48 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
-                            @change="
-                                updateCard(
-                                    row,
-                                    ($event.target as HTMLSelectElement).value,
-                                )
-                            "
+                        <option value="all">Tutte le carte</option>
+                        <option value="none">Nessuna carta</option>
+                        <option
+                            v-for="card in cards"
+                            :key="card.id"
+                            :value="String(card.id)"
                         >
-                            <option value="">Tutte le carte</option>
-                            <option
-                                v-for="card in cards"
-                                :key="card.id"
-                                :value="card.id"
-                            >
-                                {{ card.name }}
-                            </option>
-                        </select>
-                    </TableCell>
-                    <TableCell class="text-right">
-                        <div v-if="editingId === row.category_id">
-                            <input
-                                v-model="editingValue"
-                                type="text"
-                                inputmode="decimal"
-                                autofocus
-                                placeholder="200 oppure 200,50"
-                                class="h-8 w-32 rounded-md border border-input bg-transparent px-2 text-right text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                                @keyup.enter="
-                                    ($event.target as HTMLInputElement).blur()
-                                "
-                                @keyup.esc="cancelEditing"
-                                @blur="saveBudget(row)"
-                            />
-                            <p
-                                v-if="errors[row.category_id]"
-                                class="mt-1 text-xs text-red-600"
-                            >
-                                {{ errors[row.category_id] }}
-                            </p>
-                        </div>
-                        <button
-                            v-else
-                            type="button"
-                            class="hover:underline"
-                            :class="{
-                                'text-muted-foreground':
-                                    row.monthly_budget === null,
-                            }"
-                            title="Modifica budget mensile"
-                            @click="startEditing(row)"
+                            {{ card.name }}
+                        </option>
+                    </select>
+                </div>
+            </div>
+
+            <TabsContent value="elenco" class="space-y-4 pt-4">
+                <Tabs v-model="activeTab">
+                    <TabsList>
+                        <TabsTrigger value="set"
+                            >Impostati ({{ setBudgets.length }})</TabsTrigger
                         >
-                            {{
-                                row.monthly_budget !== null
-                                    ? formatCurrency(row.monthly_budget)
-                                    : 'Imposta budget'
-                            }}
-                        </button>
-                    </TableCell>
-                </TableRow>
-            </TableBody>
-            <TableFooter>
-                <TableRow>
-                    <TableCell class="font-medium">{{ totalLabel }}</TableCell>
-                    <TableCell />
-                    <TableCell class="text-right font-medium">
-                        {{ formatCurrency(visibleTotal) }}
-                    </TableCell>
-                </TableRow>
-            </TableFooter>
-        </Table>
+                        <TabsTrigger value="empty"
+                            >Da impostare ({{
+                                emptyBudgets.length
+                            }})</TabsTrigger
+                        >
+                    </TabsList>
+                </Tabs>
+
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Categoria</TableHead>
+                            <TableHead>Carta</TableHead>
+                            <TableHead class="text-right"
+                                >Budget mensile</TableHead
+                            >
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        <TableRow v-if="visibleBudgets.length === 0">
+                            <TableCell
+                                colspan="3"
+                                class="text-center text-muted-foreground"
+                            >
+                                {{
+                                    activeTab === 'set'
+                                        ? 'Nessun budget impostato.'
+                                        : 'Tutte le categorie hanno un budget impostato.'
+                                }}
+                            </TableCell>
+                        </TableRow>
+                        <TableRow
+                            v-for="row in visibleBudgets"
+                            :key="row.category_id"
+                        >
+                            <TableCell>
+                                <span class="flex items-center gap-2">
+                                    <span
+                                        class="size-2.5 shrink-0 rounded-full"
+                                        :style="{
+                                            backgroundColor:
+                                                row.color ?? '#71717a',
+                                        }"
+                                    />
+                                    {{ row.name }}
+                                </span>
+                            </TableCell>
+                            <TableCell>
+                                <select
+                                    :value="row.card_id ?? ''"
+                                    :disabled="row.monthly_budget === null"
+                                    :title="
+                                        row.monthly_budget === null
+                                            ? 'Imposta prima un budget mensile'
+                                            : 'Associa questo budget a una carta'
+                                    "
+                                    class="h-8 w-full max-w-48 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+                                    @change="
+                                        updateCard(
+                                            row,
+                                            ($event.target as HTMLSelectElement)
+                                                .value,
+                                        )
+                                    "
+                                >
+                                    <option value="">Tutte le carte</option>
+                                    <option
+                                        v-for="card in cards"
+                                        :key="card.id"
+                                        :value="card.id"
+                                    >
+                                        {{ card.name }}
+                                    </option>
+                                </select>
+                            </TableCell>
+                            <TableCell class="text-right">
+                                <div v-if="editingId === row.category_id">
+                                    <input
+                                        v-model="editingValue"
+                                        type="text"
+                                        inputmode="decimal"
+                                        autofocus
+                                        placeholder="200 oppure 200,50"
+                                        class="h-8 w-32 rounded-md border border-input bg-transparent px-2 text-right text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                        @keyup.enter="
+                                            (
+                                                $event.target as HTMLInputElement
+                                            ).blur()
+                                        "
+                                        @keyup.esc="cancelEditing"
+                                        @blur="saveBudget(row)"
+                                    />
+                                    <p
+                                        v-if="errors[row.category_id]"
+                                        class="mt-1 text-xs text-red-600"
+                                    >
+                                        {{ errors[row.category_id] }}
+                                    </p>
+                                </div>
+                                <button
+                                    v-else
+                                    type="button"
+                                    class="hover:underline"
+                                    :class="{
+                                        'text-muted-foreground':
+                                            row.monthly_budget === null,
+                                    }"
+                                    title="Modifica budget mensile"
+                                    @click="startEditing(row)"
+                                >
+                                    {{
+                                        row.monthly_budget !== null
+                                            ? formatCurrency(row.monthly_budget)
+                                            : 'Imposta budget'
+                                    }}
+                                </button>
+                            </TableCell>
+                        </TableRow>
+                    </TableBody>
+                    <TableFooter>
+                        <TableRow>
+                            <TableCell class="font-medium">{{
+                                totalLabel
+                            }}</TableCell>
+                            <TableCell />
+                            <TableCell class="text-right font-medium">
+                                {{ formatCurrency(visibleTotal) }}
+                            </TableCell>
+                        </TableRow>
+                    </TableFooter>
+                </Table>
+            </TabsContent>
+
+            <TabsContent value="composizione" class="@container pt-4">
+                <CategorySpendingChart
+                    :breakdown="budgetComposition"
+                    currency="EUR"
+                    center-label="Budget mensile"
+                    empty-message="Nessun budget impostato da mostrare."
+                    size="lg"
+                />
+            </TabsContent>
+        </Tabs>
     </div>
 </template>

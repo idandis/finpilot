@@ -9,10 +9,22 @@ import type { IndicatorField } from '@/components/finance/IndicatorFieldGrid.vue
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import {
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+} from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import * as companyAnalysisRoutes from '@/routes/company-analyses';
-import type { BuffettAnswer, CompanyAnalysis, MarketAnalysis, MarketCandle, ValuationVerdict } from '@/types';
+import type {
+    BuffettAnswer,
+    CompanyAnalysis,
+    MarketAnalysis,
+    MarketCandle,
+    ValuationVerdict,
+} from '@/types';
 
 const props = defineProps<{
     analysis: CompanyAnalysis;
@@ -30,9 +42,20 @@ defineOptions({
     },
 });
 
-const VERDICT_META: Record<ValuationVerdict, { emoji: string; label: string; class: string }> = {
-    undervalued: { emoji: '🟢', label: 'Sottovalutata', class: 'text-green-600' },
-    fair: { emoji: '🟡', label: 'Correttamente valutata', class: 'text-yellow-600' },
+const VERDICT_META: Record<
+    ValuationVerdict,
+    { emoji: string; label: string; class: string }
+> = {
+    undervalued: {
+        emoji: '🟢',
+        label: 'Sottovalutata',
+        class: 'text-green-600',
+    },
+    fair: {
+        emoji: '🟡',
+        label: 'Correttamente valutata',
+        class: 'text-yellow-600',
+    },
     expensive: { emoji: '🟠', label: 'Cara', class: 'text-orange-600' },
     very_expensive: { emoji: '🔴', label: 'Molto cara', class: 'text-red-600' },
 };
@@ -109,7 +132,7 @@ const GROWTH_FIELDS: IndicatorField[] = [
         label: 'CAGR ricavi',
         suffix: '%',
         description:
-            "Il CAGR (Compound Annual Growth Rate, tasso di crescita annuo composto) calcola una crescita media \"livellata\" su più anni, invece di guardare solo l'ultimo. È utile perché un singolo anno può ingannare: un balzo eccezionale dovuto a un evento una tantum (o al contrario un anno debole per una crisi passeggera) può far sembrare l'azienda molto migliore o peggiore di quanto sia davvero nel lungo periodo. Nota: con il piano gratuito FMP usato da questa app, il calcolo copre in pratica circa 4 anni, non esattamente 5.",
+            'Il CAGR (Compound Annual Growth Rate, tasso di crescita annuo composto) calcola una crescita media "livellata" su più anni, invece di guardare solo l\'ultimo. È utile perché un singolo anno può ingannare: un balzo eccezionale dovuto a un evento una tantum (o al contrario un anno debole per una crisi passeggera) può far sembrare l\'azienda molto migliore o peggiore di quanto sia davvero nel lungo periodo. Nota: con il piano gratuito FMP usato da questa app, il calcolo copre in pratica circa 4 anni, non esattamente 5.',
         ranges: '<0% in calo · 0-5% debole · 5-15% buono · >15% eccellente',
         scoreKey: 'revenue_cagr_5y',
     },
@@ -118,7 +141,7 @@ const GROWTH_FIELDS: IndicatorField[] = [
         label: 'CAGR EPS',
         suffix: '%',
         description:
-            "La stessa logica del CAGR ricavi, applicata all'utile per azione: una crescita media \"livellata\" su più anni (circa 4, per il limite del piano gratuito FMP), meno soggetta a un singolo anno anomalo. Confrontalo con il CAGR ricavi: se l'EPS cresce molto più dei ricavi per diversi anni di fila, capisci se è merito di margini in miglioramento (buon segno) o solo di riacquisti di azioni continui (da guardare con più cautela, perché non riflette una crescita reale del business).",
+            'La stessa logica del CAGR ricavi, applicata all\'utile per azione: una crescita media "livellata" su più anni (circa 4, per il limite del piano gratuito FMP), meno soggetta a un singolo anno anomalo. Confrontalo con il CAGR ricavi: se l\'EPS cresce molto più dei ricavi per diversi anni di fila, capisci se è merito di margini in miglioramento (buon segno) o solo di riacquisti di azioni continui (da guardare con più cautela, perché non riflette una crescita reale del business).',
         ranges: '<0% in calo · 0-10% debole · 10-20% buono · >20% eccellente',
         scoreKey: 'eps_cagr_5y',
     },
@@ -249,7 +272,10 @@ const ALL_INDICATOR_FIELDS = [
 
 type Explanation = { label: string; description: string; ranges: string };
 
-const TECHNICAL_EXPLANATIONS: Record<'sma20' | 'rsi14' | 'support' | 'resistance', Explanation> = {
+const TECHNICAL_EXPLANATIONS: Record<
+    'sma20' | 'rsi14' | 'support' | 'resistance',
+    Explanation
+> = {
     sma20: {
         label: 'Media mobile (20gg)',
         description:
@@ -265,13 +291,13 @@ const TECHNICAL_EXPLANATIONS: Record<'sma20' | 'rsi14' | 'support' | 'resistance
     support: {
         label: 'Supporto più vicino',
         description:
-            "Il supporto è il livello di prezzo più vicino, sotto quello attuale, dove il titolo ha già \"rimbalzato\" verso l'alto in passato (un minimo locale non superato al ribasso dai prezzi vicini). L'idea è che, se il prezzo torna a scendere fino a lì, potrebbe incontrare di nuovo interesse all'acquisto. È una lettura puramente grafica basata sullo storico recente, non una garanzia: i supporti possono essere \"rotti\" in qualunque momento, specie in presenza di brutte notizie sull'azienda.",
+            'Il supporto è il livello di prezzo più vicino, sotto quello attuale, dove il titolo ha già "rimbalzato" verso l\'alto in passato (un minimo locale non superato al ribasso dai prezzi vicini). L\'idea è che, se il prezzo torna a scendere fino a lì, potrebbe incontrare di nuovo interesse all\'acquisto. È una lettura puramente grafica basata sullo storico recente, non una garanzia: i supporti possono essere "rotti" in qualunque momento, specie in presenza di brutte notizie sull\'azienda.',
         ranges: '',
     },
     resistance: {
         label: 'Resistenza più vicina',
         description:
-            "La resistenza è il livello di prezzo più vicino, sopra quello attuale, dove il titolo ha già incontrato vendite che ne hanno fermato la salita in passato (un massimo locale non superato dai prezzi vicini). Se il prezzo sale fino a lì, potrebbe rallentare o invertire. Come il supporto, è una lettura grafica indicativa: superare una resistenza con decisione (breakout) è spesso interpretato come un segnale di forza.",
+            'La resistenza è il livello di prezzo più vicino, sopra quello attuale, dove il titolo ha già incontrato vendite che ne hanno fermato la salita in passato (un massimo locale non superato dai prezzi vicini). Se il prezzo sale fino a lì, potrebbe rallentare o invertire. Come il supporto, è una lettura grafica indicativa: superare una resistenza con decisione (breakout) è spesso interpretato come un segnale di forza.',
         ranges: '',
     },
 };
@@ -302,7 +328,9 @@ function rsiSignalText(signal: MarketAnalysis['rsi14_signal']) {
 }
 
 function rsiSignalClass(signal: MarketAnalysis['rsi14_signal']) {
-    return signal === 'overbought' || signal === 'oversold' ? 'text-amber-600' : 'text-muted-foreground';
+    return signal === 'overbought' || signal === 'oversold'
+        ? 'text-amber-600'
+        : 'text-muted-foreground';
 }
 
 // The shadcn Input wrapper's `default-value` (via VueUse's useVModel) only
@@ -315,7 +343,8 @@ const indicatorValues = reactive<Record<string, number | string>>({});
 
 function syncIndicatorValues() {
     for (const field of ALL_INDICATOR_FIELDS) {
-        indicatorValues[field.key] = (props.analysis[field.key] as number | null) ?? '';
+        indicatorValues[field.key] =
+            (props.analysis[field.key] as number | null) ?? '';
     }
 }
 
@@ -329,7 +358,10 @@ function formatDate(value: string | null) {
         return null;
     }
 
-    return new Intl.DateTimeFormat('it-IT', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+    return new Intl.DateTimeFormat('it-IT', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+    }).format(new Date(value));
 }
 
 function formatPrice(value: number | null) {
@@ -352,7 +384,11 @@ function formatPercent(value: number | null) {
 }
 
 function destroyAnalysis() {
-    if (confirm(`Eliminare l'analisi di "${props.analysis.name}"? L'operazione non può essere annullata.`)) {
+    if (
+        confirm(
+            `Eliminare l'analisi di "${props.analysis.name}"? L'operazione non può essere annullata.`,
+        )
+    ) {
         router.delete(companyAnalysisRoutes.destroy(props.analysis.id).url);
     }
 }
@@ -364,7 +400,12 @@ function destroyAnalysis() {
     <div class="mx-auto flex w-full max-w-[64rem] flex-col space-y-6 p-4">
         <div class="flex flex-wrap items-start justify-between gap-4">
             <Heading :title="analysis.name" :description="analysis.symbol" />
-            <Button variant="destructive" class="shrink-0" @click="destroyAnalysis">Elimina analisi</Button>
+            <Button
+                variant="destructive"
+                class="shrink-0"
+                @click="destroyAnalysis"
+                >Elimina analisi</Button
+            >
         </div>
 
         <div class="space-y-4">
@@ -376,8 +417,20 @@ function destroyAnalysis() {
                             : 'Grafico mai caricato: aggiornalo per scaricare lo storico prezzi da EODHD.'
                     }}
                 </p>
-                <Form v-bind="CompanyAnalysisController.refreshPriceHistory.form(analysis.id)" v-slot="{ processing }">
-                    <Button type="submit" variant="outline" class="shrink-0" :disabled="processing">
+                <Form
+                    v-bind="
+                        CompanyAnalysisController.refreshPriceHistory.form(
+                            analysis.id,
+                        )
+                    "
+                    v-slot="{ processing }"
+                >
+                    <Button
+                        type="submit"
+                        variant="outline"
+                        class="shrink-0"
+                        :disabled="processing"
+                    >
                         {{ processing ? 'Aggiornamento…' : 'Aggiorna grafico' }}
                     </Button>
                 </Form>
@@ -385,7 +438,9 @@ function destroyAnalysis() {
             <CandlestickChart :candles="priceHistory" />
         </div>
 
-        <div class="flex flex-wrap items-center justify-between gap-4 rounded-lg border p-4">
+        <div
+            class="flex flex-wrap items-center justify-between gap-4 rounded-lg border p-4"
+        >
             <p class="text-xs text-muted-foreground">
                 {{
                     analysis.indicators_fetched_at
@@ -393,354 +448,624 @@ function destroyAnalysis() {
                         : 'Mai aggiornato automaticamente: inserisci i valori a mano o prova ad aggiornarli da FMP.'
                 }}
             </p>
-            <Form v-bind="CompanyAnalysisController.refreshIndicators.form(analysis.id)" v-slot="{ processing }">
-                <Button type="submit" variant="outline" class="shrink-0" :disabled="processing">
+            <Form
+                v-bind="
+                    CompanyAnalysisController.refreshIndicators.form(
+                        analysis.id,
+                    )
+                "
+                v-slot="{ processing }"
+            >
+                <Button
+                    type="submit"
+                    variant="outline"
+                    class="shrink-0"
+                    :disabled="processing"
+                >
                     {{ processing ? 'Aggiornamento…' : 'Aggiorna da FMP' }}
                 </Button>
             </Form>
         </div>
 
-        <Tabs default-value="analisi-tecnica">
-            <TabsList class="h-auto flex-wrap">
-                <TabsTrigger value="analisi-tecnica">Analisi tecnica</TabsTrigger>
-                <TabsTrigger value="redditivita">Redditività</TabsTrigger>
-                <TabsTrigger value="crescita">Crescita</TabsTrigger>
-                <TabsTrigger value="solidita">Solidità</TabsTrigger>
-                <TabsTrigger value="cash-flow">Cash Flow</TabsTrigger>
-                <TabsTrigger value="valutazione">Valutazione</TabsTrigger>
-                <TabsTrigger value="buffett">Buffett</TabsTrigger>
+        <Tabs
+            default-value="analisi-tecnica"
+            orientation="vertical"
+            class="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-10"
+        >
+            <TabsList
+                class="flex h-auto w-full flex-none flex-col items-stretch justify-start gap-1 rounded-none bg-transparent p-0 lg:w-56"
+            >
+                <TabsTrigger
+                    value="analisi-tecnica"
+                    class="h-auto w-full flex-none justify-start rounded-md px-3 py-2 text-left text-sm font-medium data-[state=active]:bg-muted data-[state=active]:shadow-none"
+                    >Analisi tecnica</TabsTrigger
+                >
+                <TabsTrigger
+                    value="redditivita"
+                    class="h-auto w-full flex-none justify-start rounded-md px-3 py-2 text-left text-sm font-medium data-[state=active]:bg-muted data-[state=active]:shadow-none"
+                    >Redditività</TabsTrigger
+                >
+                <TabsTrigger
+                    value="crescita"
+                    class="h-auto w-full flex-none justify-start rounded-md px-3 py-2 text-left text-sm font-medium data-[state=active]:bg-muted data-[state=active]:shadow-none"
+                    >Crescita</TabsTrigger
+                >
+                <TabsTrigger
+                    value="solidita"
+                    class="h-auto w-full flex-none justify-start rounded-md px-3 py-2 text-left text-sm font-medium data-[state=active]:bg-muted data-[state=active]:shadow-none"
+                    >Solidità</TabsTrigger
+                >
+                <TabsTrigger
+                    value="cash-flow"
+                    class="h-auto w-full flex-none justify-start rounded-md px-3 py-2 text-left text-sm font-medium data-[state=active]:bg-muted data-[state=active]:shadow-none"
+                    >Cash Flow</TabsTrigger
+                >
+                <TabsTrigger
+                    value="valutazione"
+                    class="h-auto w-full flex-none justify-start rounded-md px-3 py-2 text-left text-sm font-medium data-[state=active]:bg-muted data-[state=active]:shadow-none"
+                    >Valutazione</TabsTrigger
+                >
+                <TabsTrigger
+                    value="buffett"
+                    class="h-auto w-full flex-none justify-start rounded-md px-3 py-2 text-left text-sm font-medium data-[state=active]:bg-muted data-[state=active]:shadow-none"
+                    >Buffett</TabsTrigger
+                >
             </TabsList>
 
-            <TabsContent value="analisi-tecnica" class="pt-8">
-                <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                    <div class="grid gap-2">
-                        <div class="flex items-center gap-1.5">
-                            <p class="text-xs text-muted-foreground">Media mobile (20gg)</p>
-                            <button
-                                type="button"
-                                class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
-                                aria-label="Spiegazione: Media mobile (20gg)"
-                                @click="explanationField = TECHNICAL_EXPLANATIONS.sma20"
-                            >
-                                ?
-                            </button>
-                        </div>
-                        <p class="font-medium">{{ technicalAnalysis.sma20 !== null ? formatPrice(technicalAnalysis.sma20) : '—' }}</p>
-                        <p class="text-xs text-muted-foreground">{{ smaSignalText(technicalAnalysis.sma20_signal) }}</p>
-                    </div>
-
-                    <div class="grid gap-2">
-                        <div class="flex items-center gap-1.5">
-                            <p class="text-xs text-muted-foreground">RSI (14)</p>
-                            <button
-                                type="button"
-                                class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
-                                aria-label="Spiegazione: RSI (14)"
-                                @click="explanationField = TECHNICAL_EXPLANATIONS.rsi14"
-                            >
-                                ?
-                            </button>
-                        </div>
-                        <p class="font-medium">{{ technicalAnalysis.rsi14 ?? '—' }}</p>
-                        <p class="text-xs" :class="rsiSignalClass(technicalAnalysis.rsi14_signal)">
-                            {{ rsiSignalText(technicalAnalysis.rsi14_signal) }}
-                        </p>
-                    </div>
-
-                    <div class="grid gap-2">
-                        <div class="flex items-center gap-1.5">
-                            <p class="text-xs text-muted-foreground">Supporto più vicino</p>
-                            <button
-                                type="button"
-                                class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
-                                aria-label="Spiegazione: Supporto più vicino"
-                                @click="explanationField = TECHNICAL_EXPLANATIONS.support"
-                            >
-                                ?
-                            </button>
-                        </div>
-                        <p class="font-medium">{{ technicalAnalysis.support !== null ? formatPrice(technicalAnalysis.support) : '—' }}</p>
-                    </div>
-
-                    <div class="grid gap-2">
-                        <div class="flex items-center gap-1.5">
-                            <p class="text-xs text-muted-foreground">Resistenza più vicina</p>
-                            <button
-                                type="button"
-                                class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
-                                aria-label="Spiegazione: Resistenza più vicina"
-                                @click="explanationField = TECHNICAL_EXPLANATIONS.resistance"
-                            >
-                                ?
-                            </button>
-                        </div>
-                        <p class="font-medium">{{ technicalAnalysis.resistance !== null ? formatPrice(technicalAnalysis.resistance) : '—' }}</p>
-                    </div>
-                </div>
-
-                <p class="mt-6 text-xs text-muted-foreground">
-                    Indicatori calcolati automaticamente sullo storico prezzi caricato nel grafico qui sopra: non costituiscono un consiglio di
-                    investimento.
-                </p>
-            </TabsContent>
-
-            <TabsContent value="redditivita" class="pt-8">
-                <Form
-                    :key="analysis.updated_at"
-                    v-bind="CompanyAnalysisController.update.form(analysis.id)"
-                    class="space-y-6"
-                    v-slot="{ errors, processing }"
-                >
-                    <IndicatorFieldGrid
-                        :fields="PROFITABILITY_FIELDS"
-                        :scores="analysis.scores"
-                        :values="indicatorValues"
-                        :errors="errors"
-                        @explain="(field) => (explanationField = field)"
-                        @update="(key, value) => (indicatorValues[key] = value)"
-                    />
-
-                    <div class="flex items-center gap-4">
-                        <Button type="submit" :disabled="processing">Salva redditività</Button>
-                    </div>
-                </Form>
-            </TabsContent>
-
-            <TabsContent value="crescita" class="pt-8">
-                <Form
-                    :key="analysis.updated_at"
-                    v-bind="CompanyAnalysisController.update.form(analysis.id)"
-                    class="space-y-6"
-                    v-slot="{ errors, processing }"
-                >
-                    <IndicatorFieldGrid
-                        :fields="GROWTH_FIELDS"
-                        :scores="analysis.scores"
-                        :values="indicatorValues"
-                        :errors="errors"
-                        @explain="(field) => (explanationField = field)"
-                        @update="(key, value) => (indicatorValues[key] = value)"
-                    />
-
-                    <div class="flex items-center gap-4">
-                        <Button type="submit" :disabled="processing">Salva crescita</Button>
-                    </div>
-                </Form>
-            </TabsContent>
-
-            <TabsContent value="solidita" class="pt-8">
-                <Form
-                    :key="analysis.updated_at"
-                    v-bind="CompanyAnalysisController.update.form(analysis.id)"
-                    class="space-y-6"
-                    v-slot="{ errors, processing }"
-                >
-                    <IndicatorFieldGrid
-                        :fields="SOLIDITY_FIELDS"
-                        :scores="analysis.scores"
-                        :values="indicatorValues"
-                        :errors="errors"
-                        @explain="(field) => (explanationField = field)"
-                        @update="(key, value) => (indicatorValues[key] = value)"
-                    />
-
-                    <div class="flex items-center gap-4">
-                        <Button type="submit" :disabled="processing">Salva solidità</Button>
-                    </div>
-                </Form>
-            </TabsContent>
-
-            <TabsContent value="cash-flow" class="pt-8">
-                <Form
-                    :key="analysis.updated_at"
-                    v-bind="CompanyAnalysisController.update.form(analysis.id)"
-                    class="space-y-6"
-                    v-slot="{ errors, processing }"
-                >
-                    <IndicatorFieldGrid
-                        :fields="CASH_FLOW_FIELDS"
-                        :scores="analysis.scores"
-                        :values="indicatorValues"
-                        :errors="errors"
-                        @explain="(field) => (explanationField = field)"
-                        @update="(key, value) => (indicatorValues[key] = value)"
-                    />
-
-                    <div class="flex items-center gap-4">
-                        <Button type="submit" :disabled="processing">Salva cash flow</Button>
-                    </div>
-                </Form>
-            </TabsContent>
-
-            <TabsContent value="valutazione" class="pt-8">
-                <Form
-                    :key="analysis.updated_at"
-                    v-bind="CompanyAnalysisController.update.form(analysis.id)"
-                    class="space-y-6"
-                    v-slot="{ errors, processing }"
-                >
-                    <IndicatorFieldGrid
-                        :fields="VALUATION_FIELDS"
-                        :scores="analysis.scores"
-                        :values="indicatorValues"
-                        :errors="errors"
-                        @explain="(field) => (explanationField = field)"
-                        @update="(key, value) => (indicatorValues[key] = value)"
-                    />
-
-                    <DcfCalculator
-                        :market-cap="analysis.market_cap"
-                        :current-price="analysis.current_price"
-                        :currency="analysis.indicators_currency"
-                        @apply="(value) => (indicatorValues.fair_value = value)"
-                    />
-
-                    <div class="grid gap-2">
-                        <Label for="historical_comparison">Confronto con la media storica</Label>
-                        <textarea
-                            id="historical_comparison"
-                            name="historical_comparison"
-                            :value="analysis.historical_comparison ?? ''"
-                            rows="3"
-                            placeholder="Es. P/E medio ultimi 10 anni: 30, oggi: 45..."
-                            class="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive w-full min-w-0 resize-y rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] md:text-sm"
-                        ></textarea>
-                        <p class="text-xs text-muted-foreground">
-                            L'azienda oggi è più cara del suo passato? Se il business non è cambiato ma la valutazione sì, chiediti se il premio è giustificato.
-                        </p>
-                    </div>
-
-                    <div class="grid gap-2">
-                        <Label for="competitor_comparison">Confronto con i concorrenti</Label>
-                        <textarea
-                            id="competitor_comparison"
-                            name="competitor_comparison"
-                            :value="analysis.competitor_comparison ?? ''"
-                            rows="3"
-                            placeholder="Es. rispetto ad Alphabet, Amazon, Oracle..."
-                            class="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive w-full min-w-0 resize-y rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] md:text-sm"
-                        ></textarea>
-                        <p class="text-xs text-muted-foreground">
-                            Se quota molto più cara di tutti i concorrenti diretti, capisci il motivo prima di comprare.
-                        </p>
-                    </div>
-
-                    <div class="flex items-center gap-4">
-                        <Button type="submit" :disabled="processing">Salva valutazione</Button>
-                    </div>
-                </Form>
-
-                <div class="mt-8 rounded-lg border p-6 text-center">
-                    <p class="text-xs tracking-wide text-muted-foreground uppercase">Valutazione Finale</p>
-                    <p v-if="analysis.valuation.verdict" class="mt-2 text-3xl font-bold" :class="VERDICT_META[analysis.valuation.verdict].class">
-                        {{ VERDICT_META[analysis.valuation.verdict].emoji }} {{ VERDICT_META[analysis.valuation.verdict].label }}
-                    </p>
-                    <p v-else class="mt-2 text-sm text-muted-foreground">
-                        Inserisci il Fair Value (e, se possibile, il prezzo attuale) per vedere la valutazione.
-                    </p>
-                </div>
-
-                <div v-if="analysis.fair_value !== null" class="mt-6 rounded-lg border p-4">
-                    <h3 class="mb-3 text-sm font-semibold">Decisione Operativa</h3>
-                    <dl class="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
-                        <div>
-                            <dt class="text-xs text-muted-foreground">Prezzo attuale</dt>
-                            <dd class="font-medium">{{ formatPrice(analysis.current_price) }}</dd>
-                        </div>
-                        <div>
-                            <dt class="text-xs text-muted-foreground">Fair Value</dt>
-                            <dd class="font-medium">{{ formatPrice(analysis.fair_value) }}</dd>
-                        </div>
-                        <div>
-                            <dt class="text-xs text-muted-foreground">Scostamento</dt>
-                            <dd class="font-medium">{{ formatPercent(analysis.valuation.deviation_percent) }}</dd>
-                        </div>
-                        <div>
-                            <dt class="text-xs text-muted-foreground">Valutazione</dt>
-                            <dd v-if="analysis.valuation.verdict" class="font-medium" :class="VERDICT_META[analysis.valuation.verdict].class">
-                                {{ VERDICT_META[analysis.valuation.verdict].emoji }} {{ VERDICT_META[analysis.valuation.verdict].label }}
-                            </dd>
-                            <dd v-else class="font-medium text-muted-foreground">—</dd>
-                        </div>
-                        <div class="col-span-2">
-                            <dt class="text-xs text-muted-foreground">Azione consigliata</dt>
-                            <dd v-if="analysis.valuation.verdict" class="font-medium" :class="VERDICT_META[analysis.valuation.verdict].class">
-                                {{ VERDICT_META[analysis.valuation.verdict].emoji }} {{ analysis.valuation.recommended_action }}
-                            </dd>
-                            <dd v-else class="font-medium text-muted-foreground">—</dd>
-                        </div>
-                        <div>
-                            <dt class="text-xs text-muted-foreground">Prezzo per iniziare ad acquistare</dt>
-                            <dd class="font-medium">&lt; {{ formatPrice(analysis.valuation.entry_price) }}</dd>
-                        </div>
-                        <div>
-                            <dt class="text-xs text-muted-foreground">Prezzo ideale per accumulare con decisione</dt>
-                            <dd class="font-medium">&lt; {{ formatPrice(analysis.valuation.accumulate_price) }}</dd>
-                        </div>
-                    </dl>
-                    <p class="mt-3 text-xs text-muted-foreground">
-                        Soglie indicative (margine di sicurezza 5%/15% sul Fair Value), non una raccomandazione di investimento.
-                    </p>
-                </div>
-            </TabsContent>
-
-            <TabsContent value="buffett" class="pt-8">
-                <Form
-                    :key="analysis.updated_at"
-                    v-bind="CompanyAnalysisController.update.form(analysis.id)"
-                    class="space-y-6"
-                    v-slot="{ processing }"
-                >
-                    <div v-for="(question, index) in buffettQuestions" :key="question.key" class="space-y-2 rounded-lg border p-4">
-                        <input type="hidden" :name="`buffett_answers[${index}][key]`" :value="question.key" />
-
-                        <div class="flex items-start justify-between gap-4">
-                            <p class="font-medium">{{ question.label }}</p>
-                            <div class="flex shrink-0 items-center gap-4">
-                                <label class="flex items-center gap-1.5 text-sm">
-                                    <input
-                                        type="radio"
-                                        :name="`buffett_answers[${index}][answer]`"
-                                        value="1"
-                                        :checked="question.answer === true"
-                                    />
-                                    Sì
-                                </label>
-                                <label class="flex items-center gap-1.5 text-sm">
-                                    <input
-                                        type="radio"
-                                        :name="`buffett_answers[${index}][answer]`"
-                                        value="0"
-                                        :checked="question.answer === false"
-                                    />
-                                    No
-                                </label>
+            <div class="min-w-0 flex-1">
+                <TabsContent value="analisi-tecnica">
+                    <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                        <div class="grid gap-2">
+                            <div class="flex items-center gap-1.5">
+                                <p class="text-xs text-muted-foreground">
+                                    Media mobile (20gg)
+                                </p>
+                                <button
+                                    type="button"
+                                    class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                                    aria-label="Spiegazione: Media mobile (20gg)"
+                                    @click="
+                                        explanationField =
+                                            TECHNICAL_EXPLANATIONS.sma20
+                                    "
+                                >
+                                    ?
+                                </button>
                             </div>
+                            <p class="font-medium">
+                                {{
+                                    technicalAnalysis.sma20 !== null
+                                        ? formatPrice(technicalAnalysis.sma20)
+                                        : '—'
+                                }}
+                            </p>
+                            <p class="text-xs text-muted-foreground">
+                                {{
+                                    smaSignalText(
+                                        technicalAnalysis.sma20_signal,
+                                    )
+                                }}
+                            </p>
                         </div>
 
-                        <textarea
-                            :name="`buffett_answers[${index}][notes]`"
-                            :value="question.notes ?? ''"
-                            rows="2"
-                            placeholder="Note (opzionale)"
-                            class="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive w-full min-w-0 resize-y rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] md:text-sm"
-                        ></textarea>
+                        <div class="grid gap-2">
+                            <div class="flex items-center gap-1.5">
+                                <p class="text-xs text-muted-foreground">
+                                    RSI (14)
+                                </p>
+                                <button
+                                    type="button"
+                                    class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                                    aria-label="Spiegazione: RSI (14)"
+                                    @click="
+                                        explanationField =
+                                            TECHNICAL_EXPLANATIONS.rsi14
+                                    "
+                                >
+                                    ?
+                                </button>
+                            </div>
+                            <p class="font-medium">
+                                {{ technicalAnalysis.rsi14 ?? '—' }}
+                            </p>
+                            <p
+                                class="text-xs"
+                                :class="
+                                    rsiSignalClass(
+                                        technicalAnalysis.rsi14_signal,
+                                    )
+                                "
+                            >
+                                {{
+                                    rsiSignalText(
+                                        technicalAnalysis.rsi14_signal,
+                                    )
+                                }}
+                            </p>
+                        </div>
+
+                        <div class="grid gap-2">
+                            <div class="flex items-center gap-1.5">
+                                <p class="text-xs text-muted-foreground">
+                                    Supporto più vicino
+                                </p>
+                                <button
+                                    type="button"
+                                    class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                                    aria-label="Spiegazione: Supporto più vicino"
+                                    @click="
+                                        explanationField =
+                                            TECHNICAL_EXPLANATIONS.support
+                                    "
+                                >
+                                    ?
+                                </button>
+                            </div>
+                            <p class="font-medium">
+                                {{
+                                    technicalAnalysis.support !== null
+                                        ? formatPrice(technicalAnalysis.support)
+                                        : '—'
+                                }}
+                            </p>
+                        </div>
+
+                        <div class="grid gap-2">
+                            <div class="flex items-center gap-1.5">
+                                <p class="text-xs text-muted-foreground">
+                                    Resistenza più vicina
+                                </p>
+                                <button
+                                    type="button"
+                                    class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                                    aria-label="Spiegazione: Resistenza più vicina"
+                                    @click="
+                                        explanationField =
+                                            TECHNICAL_EXPLANATIONS.resistance
+                                    "
+                                >
+                                    ?
+                                </button>
+                            </div>
+                            <p class="font-medium">
+                                {{
+                                    technicalAnalysis.resistance !== null
+                                        ? formatPrice(
+                                              technicalAnalysis.resistance,
+                                          )
+                                        : '—'
+                                }}
+                            </p>
+                        </div>
                     </div>
 
-                    <div class="flex items-center gap-4">
-                        <Button type="submit" :disabled="processing">Salva risposte</Button>
+                    <p class="mt-6 text-xs text-muted-foreground">
+                        Indicatori calcolati automaticamente sullo storico
+                        prezzi caricato nel grafico qui sopra: non costituiscono
+                        un consiglio di investimento.
+                    </p>
+                </TabsContent>
+
+                <TabsContent value="redditivita">
+                    <Form
+                        :key="analysis.updated_at"
+                        v-bind="
+                            CompanyAnalysisController.update.form(analysis.id)
+                        "
+                        class="space-y-6"
+                        v-slot="{ errors, processing }"
+                    >
+                        <IndicatorFieldGrid
+                            :fields="PROFITABILITY_FIELDS"
+                            :scores="analysis.scores"
+                            :values="indicatorValues"
+                            :errors="errors"
+                            @explain="(field) => (explanationField = field)"
+                            @update="
+                                (key, value) => (indicatorValues[key] = value)
+                            "
+                        />
+
+                        <div class="flex items-center gap-4">
+                            <Button type="submit" :disabled="processing"
+                                >Salva redditività</Button
+                            >
+                        </div>
+                    </Form>
+                </TabsContent>
+
+                <TabsContent value="crescita">
+                    <Form
+                        :key="analysis.updated_at"
+                        v-bind="
+                            CompanyAnalysisController.update.form(analysis.id)
+                        "
+                        class="space-y-6"
+                        v-slot="{ errors, processing }"
+                    >
+                        <IndicatorFieldGrid
+                            :fields="GROWTH_FIELDS"
+                            :scores="analysis.scores"
+                            :values="indicatorValues"
+                            :errors="errors"
+                            @explain="(field) => (explanationField = field)"
+                            @update="
+                                (key, value) => (indicatorValues[key] = value)
+                            "
+                        />
+
+                        <div class="flex items-center gap-4">
+                            <Button type="submit" :disabled="processing"
+                                >Salva crescita</Button
+                            >
+                        </div>
+                    </Form>
+                </TabsContent>
+
+                <TabsContent value="solidita">
+                    <Form
+                        :key="analysis.updated_at"
+                        v-bind="
+                            CompanyAnalysisController.update.form(analysis.id)
+                        "
+                        class="space-y-6"
+                        v-slot="{ errors, processing }"
+                    >
+                        <IndicatorFieldGrid
+                            :fields="SOLIDITY_FIELDS"
+                            :scores="analysis.scores"
+                            :values="indicatorValues"
+                            :errors="errors"
+                            @explain="(field) => (explanationField = field)"
+                            @update="
+                                (key, value) => (indicatorValues[key] = value)
+                            "
+                        />
+
+                        <div class="flex items-center gap-4">
+                            <Button type="submit" :disabled="processing"
+                                >Salva solidità</Button
+                            >
+                        </div>
+                    </Form>
+                </TabsContent>
+
+                <TabsContent value="cash-flow">
+                    <Form
+                        :key="analysis.updated_at"
+                        v-bind="
+                            CompanyAnalysisController.update.form(analysis.id)
+                        "
+                        class="space-y-6"
+                        v-slot="{ errors, processing }"
+                    >
+                        <IndicatorFieldGrid
+                            :fields="CASH_FLOW_FIELDS"
+                            :scores="analysis.scores"
+                            :values="indicatorValues"
+                            :errors="errors"
+                            @explain="(field) => (explanationField = field)"
+                            @update="
+                                (key, value) => (indicatorValues[key] = value)
+                            "
+                        />
+
+                        <div class="flex items-center gap-4">
+                            <Button type="submit" :disabled="processing"
+                                >Salva cash flow</Button
+                            >
+                        </div>
+                    </Form>
+                </TabsContent>
+
+                <TabsContent value="valutazione">
+                    <Form
+                        :key="analysis.updated_at"
+                        v-bind="
+                            CompanyAnalysisController.update.form(analysis.id)
+                        "
+                        class="space-y-6"
+                        v-slot="{ errors, processing }"
+                    >
+                        <IndicatorFieldGrid
+                            :fields="VALUATION_FIELDS"
+                            :scores="analysis.scores"
+                            :values="indicatorValues"
+                            :errors="errors"
+                            @explain="(field) => (explanationField = field)"
+                            @update="
+                                (key, value) => (indicatorValues[key] = value)
+                            "
+                        />
+
+                        <DcfCalculator
+                            :market-cap="analysis.market_cap"
+                            :current-price="analysis.current_price"
+                            :currency="analysis.indicators_currency"
+                            @apply="
+                                (value) => (indicatorValues.fair_value = value)
+                            "
+                        />
+
+                        <div class="grid gap-2">
+                            <Label for="historical_comparison"
+                                >Confronto con la media storica</Label
+                            >
+                            <textarea
+                                id="historical_comparison"
+                                name="historical_comparison"
+                                :value="analysis.historical_comparison ?? ''"
+                                rows="3"
+                                placeholder="Es. P/E medio ultimi 10 anni: 30, oggi: 45..."
+                                class="w-full min-w-0 resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 md:text-sm dark:aria-invalid:ring-destructive/40"
+                            ></textarea>
+                            <p class="text-xs text-muted-foreground">
+                                L'azienda oggi è più cara del suo passato? Se il
+                                business non è cambiato ma la valutazione sì,
+                                chiediti se il premio è giustificato.
+                            </p>
+                        </div>
+
+                        <div class="grid gap-2">
+                            <Label for="competitor_comparison"
+                                >Confronto con i concorrenti</Label
+                            >
+                            <textarea
+                                id="competitor_comparison"
+                                name="competitor_comparison"
+                                :value="analysis.competitor_comparison ?? ''"
+                                rows="3"
+                                placeholder="Es. rispetto ad Alphabet, Amazon, Oracle..."
+                                class="w-full min-w-0 resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 md:text-sm dark:aria-invalid:ring-destructive/40"
+                            ></textarea>
+                            <p class="text-xs text-muted-foreground">
+                                Se quota molto più cara di tutti i concorrenti
+                                diretti, capisci il motivo prima di comprare.
+                            </p>
+                        </div>
+
+                        <div class="flex items-center gap-4">
+                            <Button type="submit" :disabled="processing"
+                                >Salva valutazione</Button
+                            >
+                        </div>
+                    </Form>
+
+                    <div class="mt-8 rounded-lg border p-6 text-center">
+                        <p
+                            class="text-xs tracking-wide text-muted-foreground uppercase"
+                        >
+                            Valutazione Finale
+                        </p>
+                        <p
+                            v-if="analysis.valuation.verdict"
+                            class="mt-2 text-3xl font-bold"
+                            :class="
+                                VERDICT_META[analysis.valuation.verdict].class
+                            "
+                        >
+                            {{ VERDICT_META[analysis.valuation.verdict].emoji }}
+                            {{ VERDICT_META[analysis.valuation.verdict].label }}
+                        </p>
+                        <p v-else class="mt-2 text-sm text-muted-foreground">
+                            Inserisci il Fair Value (e, se possibile, il prezzo
+                            attuale) per vedere la valutazione.
+                        </p>
                     </div>
-                </Form>
-            </TabsContent>
+
+                    <div
+                        v-if="analysis.fair_value !== null"
+                        class="mt-6 rounded-lg border p-4"
+                    >
+                        <h3 class="mb-3 text-sm font-semibold">
+                            Decisione Operativa
+                        </h3>
+                        <dl
+                            class="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4"
+                        >
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    Prezzo attuale
+                                </dt>
+                                <dd class="font-medium">
+                                    {{ formatPrice(analysis.current_price) }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    Fair Value
+                                </dt>
+                                <dd class="font-medium">
+                                    {{ formatPrice(analysis.fair_value) }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    Scostamento
+                                </dt>
+                                <dd class="font-medium">
+                                    {{
+                                        formatPercent(
+                                            analysis.valuation
+                                                .deviation_percent,
+                                        )
+                                    }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    Valutazione
+                                </dt>
+                                <dd
+                                    v-if="analysis.valuation.verdict"
+                                    class="font-medium"
+                                    :class="
+                                        VERDICT_META[analysis.valuation.verdict]
+                                            .class
+                                    "
+                                >
+                                    {{
+                                        VERDICT_META[analysis.valuation.verdict]
+                                            .emoji
+                                    }}
+                                    {{
+                                        VERDICT_META[analysis.valuation.verdict]
+                                            .label
+                                    }}
+                                </dd>
+                                <dd
+                                    v-else
+                                    class="font-medium text-muted-foreground"
+                                >
+                                    —
+                                </dd>
+                            </div>
+                            <div class="col-span-2">
+                                <dt class="text-xs text-muted-foreground">
+                                    Azione consigliata
+                                </dt>
+                                <dd
+                                    v-if="analysis.valuation.verdict"
+                                    class="font-medium"
+                                    :class="
+                                        VERDICT_META[analysis.valuation.verdict]
+                                            .class
+                                    "
+                                >
+                                    {{
+                                        VERDICT_META[analysis.valuation.verdict]
+                                            .emoji
+                                    }}
+                                    {{ analysis.valuation.recommended_action }}
+                                </dd>
+                                <dd
+                                    v-else
+                                    class="font-medium text-muted-foreground"
+                                >
+                                    —
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    Prezzo per iniziare ad acquistare
+                                </dt>
+                                <dd class="font-medium">
+                                    &lt;
+                                    {{
+                                        formatPrice(
+                                            analysis.valuation.entry_price,
+                                        )
+                                    }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    Prezzo ideale per accumulare con decisione
+                                </dt>
+                                <dd class="font-medium">
+                                    &lt;
+                                    {{
+                                        formatPrice(
+                                            analysis.valuation.accumulate_price,
+                                        )
+                                    }}
+                                </dd>
+                            </div>
+                        </dl>
+                        <p class="mt-3 text-xs text-muted-foreground">
+                            Soglie indicative (margine di sicurezza 5%/15% sul
+                            Fair Value), non una raccomandazione di
+                            investimento.
+                        </p>
+                    </div>
+                </TabsContent>
+
+                <TabsContent value="buffett">
+                    <Form
+                        :key="analysis.updated_at"
+                        v-bind="
+                            CompanyAnalysisController.update.form(analysis.id)
+                        "
+                        class="space-y-6"
+                        v-slot="{ processing }"
+                    >
+                        <div
+                            v-for="(question, index) in buffettQuestions"
+                            :key="question.key"
+                            class="space-y-2 rounded-lg border p-4"
+                        >
+                            <input
+                                type="hidden"
+                                :name="`buffett_answers[${index}][key]`"
+                                :value="question.key"
+                            />
+
+                            <div class="flex items-start justify-between gap-4">
+                                <p class="font-medium">{{ question.label }}</p>
+                                <div class="flex shrink-0 items-center gap-4">
+                                    <label
+                                        class="flex items-center gap-1.5 text-sm"
+                                    >
+                                        <input
+                                            type="radio"
+                                            :name="`buffett_answers[${index}][answer]`"
+                                            value="1"
+                                            :checked="question.answer === true"
+                                        />
+                                        Sì
+                                    </label>
+                                    <label
+                                        class="flex items-center gap-1.5 text-sm"
+                                    >
+                                        <input
+                                            type="radio"
+                                            :name="`buffett_answers[${index}][answer]`"
+                                            value="0"
+                                            :checked="question.answer === false"
+                                        />
+                                        No
+                                    </label>
+                                </div>
+                            </div>
+
+                            <textarea
+                                :name="`buffett_answers[${index}][notes]`"
+                                :value="question.notes ?? ''"
+                                rows="2"
+                                placeholder="Note (opzionale)"
+                                class="w-full min-w-0 resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 md:text-sm dark:aria-invalid:ring-destructive/40"
+                            ></textarea>
+                        </div>
+
+                        <div class="flex items-center gap-4">
+                            <Button type="submit" :disabled="processing"
+                                >Salva risposte</Button
+                            >
+                        </div>
+                    </Form>
+                </TabsContent>
+            </div>
         </Tabs>
 
-        <Sheet :open="explanationField !== null" @update:open="(open) => { if (!open) explanationField = null; }">
+        <Sheet
+            :open="explanationField !== null"
+            @update:open="
+                (open) => {
+                    if (!open) explanationField = null;
+                }
+            "
+        >
             <SheetContent side="right">
                 <SheetHeader>
                     <SheetTitle>{{ explanationField?.label }}</SheetTitle>
-                    <SheetDescription>{{ explanationField?.description }}</SheetDescription>
+                    <SheetDescription>{{
+                        explanationField?.description
+                    }}</SheetDescription>
                 </SheetHeader>
-                <p v-if="explanationField?.ranges" class="px-4 text-sm text-muted-foreground italic">
+                <p
+                    v-if="explanationField?.ranges"
+                    class="px-4 text-sm text-muted-foreground italic"
+                >
                     {{ explanationField.ranges }}
                 </p>
             </SheetContent>

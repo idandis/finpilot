@@ -11,13 +11,11 @@ use App\Http\Controllers\Finance\InvestmentNewsController;
 use App\Http\Controllers\Finance\InvestmentNoteController;
 use App\Http\Controllers\Finance\InvestmentPositionController;
 use App\Http\Controllers\Finance\MarketController;
-use App\Http\Controllers\Finance\OverviewController;
 use App\Http\Controllers\Finance\TransactionController;
 use App\Http\Controllers\Finance\TransactionImportController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::get('overview', [OverviewController::class, 'index'])->name('overview.index');
     Route::get('investments', [InvestmentController::class, 'index'])->name('investments.index');
     Route::post('investments/refresh', [InvestmentController::class, 'refresh'])->name('investments.refresh');
     Route::get('investments/positions/{isin}', [InvestmentPositionController::class, 'show'])->name('investments.positions.show');

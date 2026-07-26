@@ -6,6 +6,7 @@ use App\Http\Requests\Meals\MealMoveRequest;
 use App\Http\Requests\Meals\MealStoreRequest;
 use App\Models\Meal;
 use App\Services\Meals\DishCategories;
+use App\Services\Shopping\GroceryCategories;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -40,7 +41,7 @@ class MealController extends Controller
                 'position' => $meal->position,
             ]);
 
-        $dishes = $request->user()->dishes()->orderBy('name')->get(['id', 'name', 'description', 'category']);
+        $dishes = $request->user()->dishes()->with('ingredients')->orderBy('name')->get(['id', 'name', 'description', 'category']);
 
         return Inertia::render('Meals/Index', [
             'weekStart' => $weekStart->toDateString(),
@@ -48,6 +49,7 @@ class MealController extends Controller
             'meals' => $meals,
             'dishes' => $dishes,
             'dishCategories' => DishCategories::ALL,
+            'groceryCategories' => GroceryCategories::ALL,
         ]);
     }
 
@@ -76,6 +78,85 @@ class MealController extends Controller
         ]);
 
         return $pdf->download("pasti-settimana-{$weekStart->toDateString()}.pdf");
+    }
+
+    /**
+     * A dish's own category (a broad "what kind of dish is this" label -
+     * carne/pesce/pasta_riso/...) is a different classification system from
+     * a shopping list item's grocery-aisle category, and the two key sets
+     * only partially overlap. Only map the labels that mean the same thing
+     * in both systems; everything else safely falls back to "Altro" instead
+     * of silently writing an unrecognized category (which would make the
+     * item vanish from the shopping list's category grouping).
+     *
+     * @var array<string, string>
+     */
+    private const DISH_TO_GROCERY_CATEGORY = [
+        'carne' => 'carne',
+        'pesce' => 'pesce',
+    ];
+
+    /**
+     * Builds a new shopping list from every meal in the requested week: a
+     * dish's own ingredients when the meal was dragged in from the library,
+     * or the meal's own title as a single item otherwise. Items are
+     * deduplicated by name+category so a repeated dish across the week only
+     * adds its ingredients once.
+     */
+    public function generateShoppingList(Request $request): RedirectResponse
+    {
+        $weekStart = $this->resolveWeekStart($request->query('date'), Carbon::today());
+        $weekEnd = $weekStart->copy()->addDays(6);
+
+        $meals = $request->user()->meals()
+            ->whereDate('meal_date', '>=', $weekStart)
+            ->whereDate('meal_date', '<=', $weekEnd)
+            ->with('dish.ingredients')
+            ->get();
+
+        $items = collect();
+
+        foreach ($meals as $meal) {
+            if ($meal->dish && $meal->dish->ingredients->isNotEmpty()) {
+                foreach ($meal->dish->ingredients as $ingredient) {
+                    $items->push(['name' => $ingredient->name, 'category' => $ingredient->category]);
+                }
+            } else {
+                $items->push([
+                    'name' => $meal->title,
+                    'category' => self::DISH_TO_GROCERY_CATEGORY[$meal->category] ?? 'altro',
+                ]);
+            }
+        }
+
+        $deduped = $items->unique(fn (array $item) => mb_strtolower(trim($item['name'])).'|'.$item['category'])->values();
+
+        if ($deduped->isEmpty()) {
+            Inertia::flash('toast', ['type' => 'info', 'message' => 'Nessun pasto in questa settimana da cui generare una lista.']);
+
+            return back();
+        }
+
+        $list = $request->user()->shoppingLists()->create([
+            'name' => 'Spesa settimana del '.$weekStart->format('d/m/Y'),
+        ]);
+
+        $positions = [];
+
+        foreach ($deduped as $item) {
+            $category = $item['category'];
+            $positions[$category] = 1 + ($positions[$category] ?? -1);
+
+            $list->items()->create([
+                'name' => $item['name'],
+                'category' => $category,
+                'position' => $positions[$category],
+            ]);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'Lista della spesa generata dai pasti della settimana.']);
+
+        return to_route('shopping-lists.show', $list);
     }
 
     /**

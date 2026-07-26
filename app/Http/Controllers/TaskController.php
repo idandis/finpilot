@@ -14,12 +14,12 @@ use Inertia\Response;
 class TaskController extends Controller
 {
     /**
-     * The board defaults to today, but an earlier day can be requested via
-     * ?date= to browse history - never a future day. Once a day is over its
-     * tasks stay wherever they were left (nothing carries over, nothing is
-     * cleared): tomorrow's board is simply empty because no task has
-     * tomorrow's task_date yet, and past days are shown read-only (see
-     * move()/destroy()) so that history stays a faithful record.
+     * The board defaults to today, but any other day can be requested via
+     * ?date= - earlier days to browse history, later days to see/manage
+     * tasks already planned ahead. Once a day is over its tasks stay
+     * wherever they were left (nothing carries over, nothing is cleared):
+     * past days are shown read-only (see move()/destroy()) so that history
+     * stays a faithful record, while today and future days stay editable.
      */
     public function index(Request $request): Response
     {
@@ -39,8 +39,8 @@ class TaskController extends Controller
     }
 
     /**
-     * Falls back to today on a missing, malformed, or future date rather
-     * than erroring - this is only ever reached from the prev/next/"back to
+     * Falls back to today on a missing or malformed date rather than
+     * erroring - this is only ever reached from the prev/next/"back to
      * today" links, not a form a user fills in.
      */
     private function resolveDate(?string $requested, Carbon $today): Carbon
@@ -50,30 +50,33 @@ class TaskController extends Controller
         }
 
         try {
-            $date = Carbon::createFromFormat('Y-m-d', $requested)->startOfDay();
+            return Carbon::createFromFormat('Y-m-d', $requested)->startOfDay();
         } catch (\Throwable) {
             return $today;
         }
-
-        return $date->gt($today) ? $today : $date;
     }
 
     /**
-     * New tasks always start in the "todo" column, appended to its end.
+     * New tasks always start in the "todo" column, appended to its end, on
+     * the day the board is currently showing (today or a future day planned
+     * ahead of time - past days are read-only, see move()/destroy()).
      */
     public function store(TaskStoreRequest $request): RedirectResponse
     {
-        $today = Carbon::today();
+        $taskDate = $request->validated('task_date')
+            ? Carbon::parse($request->validated('task_date'))->startOfDay()
+            : Carbon::today();
 
         $nextPosition = 1 + ($request->user()->tasks()
-            ->whereDate('task_date', $today)
+            ->whereDate('task_date', $taskDate)
             ->where('status', 'todo')
             ->max('position') ?? -1);
 
         $request->user()->tasks()->create([
-            ...$request->validated(),
+            'title' => $request->validated('title'),
+            'description' => $request->validated('description'),
             'status' => 'todo',
-            'task_date' => $today,
+            'task_date' => $taskDate,
             'position' => $nextPosition,
         ]);
 
@@ -86,7 +89,7 @@ class TaskController extends Controller
      */
     public function move(TaskMoveRequest $request, Task $task): RedirectResponse
     {
-        abort_unless($task->task_date->isToday(), 403, 'Non è possibile modificare i task dei giorni passati.');
+        abort_unless(! $task->task_date->lt(Carbon::today()), 403, 'Non è possibile modificare i task dei giorni passati.');
 
         $status = $request->validated('status');
 
@@ -104,7 +107,7 @@ class TaskController extends Controller
     public function destroy(Request $request, Task $task): RedirectResponse
     {
         abort_unless($task->user_id === $request->user()->id, 403);
-        abort_unless($task->task_date->isToday(), 403, 'Non è possibile modificare i task dei giorni passati.');
+        abort_unless(! $task->task_date->lt(Carbon::today()), 403, 'Non è possibile modificare i task dei giorni passati.');
 
         $task->delete();
 

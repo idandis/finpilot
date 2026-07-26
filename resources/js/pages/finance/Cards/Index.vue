@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
 import BankCard from '@/components/finance/BankCard.vue';
+import YearlyOverviewTable from '@/components/finance/YearlyOverviewTable.vue';
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import * as cardRoutes from '@/routes/cards';
-import type { Card } from '@/types';
+import type { Card, OverviewTab } from '@/types';
 
 defineOptions({
     layout: {
@@ -14,6 +16,7 @@ defineOptions({
 
 defineProps<{
     cards: Card[];
+    overviewTabs: OverviewTab[];
 }>();
 </script>
 
@@ -50,6 +53,34 @@ defineProps<{
             >
                 <BankCard :card="card" />
             </Link>
+        </div>
+
+        <div v-if="overviewTabs.length > 0" class="space-y-4">
+            <Heading
+                title="Panoramica"
+                description="Entrate e uscite mese per mese, per singola carta"
+            />
+
+            <Tabs :default-value="overviewTabs[0].id">
+                <TabsList>
+                    <TabsTrigger
+                        v-for="tab in overviewTabs"
+                        :key="tab.id"
+                        :value="tab.id"
+                    >
+                        {{ tab.name }}
+                    </TabsTrigger>
+                </TabsList>
+
+                <TabsContent
+                    v-for="tab in overviewTabs"
+                    :key="tab.id"
+                    :value="tab.id"
+                    class="pt-4"
+                >
+                    <YearlyOverviewTable :overview="tab.overview" />
+                </TabsContent>
+            </Tabs>
         </div>
     </div>
 </template>

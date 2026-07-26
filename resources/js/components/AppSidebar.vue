@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
 import {
-    CalendarRange,
     ChartCandlestick,
     ClipboardCheck,
     CreditCard,
@@ -38,7 +37,6 @@ import * as companyAnalyses from '@/routes/company-analyses';
 import * as investments from '@/routes/investments';
 import * as market from '@/routes/market';
 import * as meals from '@/routes/meals';
-import * as overview from '@/routes/overview';
 import * as passwords from '@/routes/passwords';
 import * as shoppingLists from '@/routes/shopping-lists';
 import * as tasks from '@/routes/tasks';
@@ -49,11 +47,6 @@ const mainNavItems: NavItem[] = [
         title: 'Dashboard',
         href: dashboard(),
         icon: LayoutGrid,
-    },
-    {
-        title: 'Panoramica',
-        href: overview.index(),
-        icon: CalendarRange,
     },
     {
         title: 'Carte',

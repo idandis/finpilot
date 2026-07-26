@@ -42,6 +42,7 @@ class MealStoreRequest extends FormRequest
             'meal_date' => ['required', 'date'],
             'meal_type' => ['required', Rule::in(Meal::MEAL_TYPES)],
             'category' => ['nullable', Rule::in(DishCategories::keys())],
+            'dish_id' => ['nullable', Rule::exists('dishes', 'id')->where(fn ($query) => $query->where('user_id', $this->user()->id))],
         ];
     }
 }

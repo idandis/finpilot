@@ -29,6 +29,7 @@ const formattedDate = computed(() =>
 );
 
 const isToday = computed(() => props.date === props.today);
+const isPast = computed(() => props.date < props.today);
 
 // Calendar-day arithmetic done at UTC midnight so it never drifts a day off
 // because of the browser's local timezone/DST.
@@ -97,7 +98,7 @@ function onDrop(status: TaskStatus, event: DragEvent) {
     dragOverStatus.value = null;
     draggingTaskId.value = null;
 
-    if (taskId === null || !isToday.value) {
+    if (taskId === null || isPast.value) {
         return;
     }
 
@@ -113,7 +114,7 @@ function onDrop(status: TaskStatus, event: DragEvent) {
 }
 
 function destroyTask(task: Task) {
-    if (isToday.value && confirm(`Eliminare il task "${task.title}"?`)) {
+    if (!isPast.value && confirm(`Eliminare il task "${task.title}"?`)) {
         router.delete(taskRoutes.destroy(task.id).url, { preserveScroll: true });
     }
 }
@@ -124,7 +125,7 @@ const isAddTaskOpen = ref(false);
 <template>
     <Head title="Task" />
 
-    <div class="flex flex-col space-y-6 p-4">
+    <div class="flex flex-col space-y-6 p-4 md:flex-1 md:min-h-0">
         <div class="flex flex-wrap items-start justify-between gap-4">
             <div class="space-y-0.5">
                 <h2 class="text-xl font-semibold tracking-tight">Task</h2>
@@ -133,13 +134,13 @@ const isAddTaskOpen = ref(false);
                         <ChevronLeft />
                     </Button>
                     <span class="capitalize">{{ formattedDate }}</span>
-                    <Button variant="outline" size="icon-sm" title="Giorno successivo" :disabled="isToday" @click="goToDate(nextDate)">
+                    <Button variant="outline" size="icon-sm" title="Giorno successivo" @click="goToDate(nextDate)">
                         <ChevronRight />
                     </Button>
                     <Button v-if="!isToday" variant="ghost" size="sm" @click="goToDate(today)">Torna a oggi</Button>
                 </div>
             </div>
-            <Button v-if="isToday" class="shrink-0" @click="isAddTaskOpen = true">
+            <Button v-if="!isPast" class="shrink-0" @click="isAddTaskOpen = true">
                 <Plus />
                 Nuovo task
             </Button>
@@ -158,6 +159,7 @@ const isAddTaskOpen = ref(false);
                     v-slot="{ errors, processing }"
                     @success="isAddTaskOpen = false"
                 >
+                    <input type="hidden" name="task_date" :value="date" />
                     <div class="grid gap-2">
                         <Label for="title">Titolo</Label>
                         <Input id="title" name="title" placeholder="Es. Rispondere alle email" required autofocus />
@@ -174,12 +176,12 @@ const isAddTaskOpen = ref(false);
                         ></textarea>
                         <InputError :message="errors.description" />
                     </div>
-                    <Button type="submit" :disabled="processing">Aggiungi task</Button>
+                    <Button type="submit" :disabled="processing">Aggiungi task{{ isToday ? '' : ` per ${formattedDate}` }}</Button>
                 </Form>
             </DialogContent>
         </Dialog>
 
-        <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-3 md:flex-1 md:min-h-0">
             <div
                 v-for="column in columns"
                 :key="column.status"

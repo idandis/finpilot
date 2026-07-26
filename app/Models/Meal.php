@@ -12,6 +12,7 @@ use Illuminate\Support\Carbon;
 /**
  * @property int $id
  * @property int $user_id
+ * @property int|null $dish_id
  * @property string $title
  * @property string|null $description
  * @property Carbon $meal_date
@@ -21,7 +22,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['title', 'description', 'meal_date', 'meal_type', 'category', 'position'])]
+#[Fillable(['title', 'description', 'meal_date', 'meal_type', 'category', 'dish_id', 'position'])]
 class Meal extends Model
 {
     /** @use HasFactory<MealFactory> */
@@ -50,5 +51,17 @@ class Meal extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * The preconfigured dish this meal was created from, if any - only set
+     * when dragged in from the dish library, never for ad-hoc meals. Used to
+     * resolve ingredients when generating a shopping list from the week.
+     *
+     * @return BelongsTo<Dish, $this>
+     */
+    public function dish(): BelongsTo
+    {
+        return $this->belongsTo(Dish::class);
     }
 }

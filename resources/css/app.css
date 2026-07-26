@@ -171,10 +171,11 @@
     }
 }
 
-/* Scrollbar */
+/* Scrollbar - follows the user's chosen accent color (or the theme's
+   default primary, when no custom accent is set) from Aspetto/settings. */
 * {
     scrollbar-width: thin;
-    scrollbar-color: rgba(236, 86, 47, 0.35) transparent;
+    scrollbar-color: color-mix(in srgb, var(--primary) 35%, transparent) transparent;
 }
 
 /* Chrome / Safari / Edge */
@@ -187,11 +188,11 @@
 }
 
 ::-webkit-scrollbar-thumb {
-    background: rgba(236, 86, 47, 0.35);
+    background: color-mix(in srgb, var(--primary) 35%, transparent);
     border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: rgba(236, 86, 47, 0.65);
+    background: color-mix(in srgb, var(--primary) 65%, transparent);
 }
 /* End Scrollbar */

@@ -62,14 +62,20 @@ class TaskControllerTest extends TestCase
         $response->assertInertia(fn ($page) => $page->where('date', today()->toDateString()));
     }
 
-    public function test_a_future_date_falls_back_to_today()
+    public function test_a_future_day_can_be_browsed_via_the_date_query_param()
     {
         $user = User::factory()->create();
+        Task::factory()->create(['user_id' => $user->id, 'task_date' => today(), 'title' => 'Oggi']);
+        Task::factory()->create(['user_id' => $user->id, 'task_date' => today()->addWeek(), 'title' => 'Tra una settimana']);
 
         $response = $this->actingAs($user)->get(route('tasks.index', ['date' => today()->addWeek()->toDateString()]));
 
         $response->assertOk();
-        $response->assertInertia(fn ($page) => $page->where('date', today()->toDateString()));
+        $response->assertInertia(fn ($page) => $page
+            ->has('tasks', 1)
+            ->where('tasks.0.title', 'Tra una settimana')
+            ->where('date', today()->addWeek()->toDateString())
+        );
     }
 
     public function test_a_user_only_sees_their_own_tasks()
@@ -120,6 +126,37 @@ class TaskControllerTest extends TestCase
         $response = $this->actingAs($user)->post(route('tasks.store'), ['title' => '']);
 
         $response->assertSessionHasErrors('title');
+    }
+
+    public function test_a_user_can_create_a_task_for_a_future_day()
+    {
+        $user = User::factory()->create();
+        $futureDate = today()->addDays(3);
+
+        $response = $this->actingAs($user)->post(route('tasks.store'), [
+            'title' => 'Preparare la presentazione',
+            'task_date' => $futureDate->toDateString(),
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('tasks', [
+            'user_id' => $user->id,
+            'title' => 'Preparare la presentazione',
+            'task_date' => $futureDate->toDateString().' 00:00:00',
+        ]);
+    }
+
+    public function test_creating_a_task_for_a_past_day_is_rejected()
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->post(route('tasks.store'), [
+            'title' => 'Non valido',
+            'task_date' => today()->subDay()->toDateString(),
+        ]);
+
+        $response->assertSessionHasErrors('task_date');
+        $this->assertDatabaseMissing('tasks', ['title' => 'Non valido']);
     }
 
     public function test_new_tasks_are_appended_to_the_end_of_the_todo_column()
@@ -177,6 +214,17 @@ class TaskControllerTest extends TestCase
         $this->assertDatabaseHas('tasks', ['id' => $task->id, 'status' => 'todo']);
     }
 
+    public function test_a_user_can_move_a_task_on_a_future_day()
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => $user->id, 'task_date' => today()->addDay(), 'status' => 'todo']);
+
+        $response = $this->actingAs($user)->patch(route('tasks.move', $task), ['status' => 'in_progress']);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('tasks', ['id' => $task->id, 'status' => 'in_progress']);
+    }
+
     public function test_a_user_cannot_move_a_task_from_a_past_day()
     {
         $user = User::factory()->create();
@@ -208,6 +256,17 @@ class TaskControllerTest extends TestCase
 
         $response->assertForbidden();
         $this->assertDatabaseHas('tasks', ['id' => $task->id]);
+    }
+
+    public function test_a_user_can_delete_a_task_on_a_future_day()
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => $user->id, 'task_date' => today()->addDay()]);
+
+        $response = $this->actingAs($user)->delete(route('tasks.destroy', $task));
+
+        $response->assertRedirect();
+        $this->assertDatabaseMissing('tasks', ['id' => $task->id]);
     }
 
     public function test_a_user_cannot_delete_a_task_from_a_past_day()
