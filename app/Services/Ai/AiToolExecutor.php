@@ -5,17 +5,21 @@ namespace App\Services\Ai;
 use App\Contracts\MarketPriceProvider;
 use App\Models\Card;
 use App\Models\Dish;
+use App\Models\Exercise;
 use App\Models\Meal;
 use App\Models\ShoppingList;
 use App\Models\Task;
 use App\Models\Transaction;
 use App\Models\TransactionCategory;
 use App\Models\User;
+use App\Models\Workout;
+use App\Models\WorkoutExercise;
 use App\Services\Finance\AccountBalanceCalculator;
 use App\Services\Finance\InvestmentPositionCalculator;
 use App\Services\Finance\SpendingSummaryCalculator;
 use App\Services\Meals\DishCategories;
 use App\Services\Shopping\GroceryCategories;
+use App\Services\Workouts\ExerciseCategories;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Throwable;
@@ -28,11 +32,12 @@ use Throwable;
  * same way PasswordGroupController::index() never puts them on a page's
  * props - excluded by omission, not by a check that could be missed.
  *
- * Only two tools write (pianifica_pasti, crea_piatti_preconfigurati).
- * Writing is deliberately kept to this low-stakes domain for now - meal
- * plan entries and dish-library rows are easy to review and undo from the
- * Pasti/Piatti pages, unlike e.g. a financial transaction or a task the
- * model might get subtly wrong.
+ * Only four tools write (pianifica_pasti, crea_piatti_preconfigurati,
+ * crea_esercizi, pianifica_allenamenti). Writing is deliberately kept to
+ * these low-stakes domains for now - meal plan entries, dish-library rows,
+ * exercise-library rows and workout entries are easy to review and undo
+ * from their respective pages, unlike e.g. a financial transaction or a
+ * task the model might get subtly wrong.
  */
 class AiToolExecutor
 {
@@ -93,6 +98,17 @@ class AiToolExecutor
             self::definition(
                 'piatti_preconfigurati',
                 'I piatti nella libreria "piatti preconfigurati" dell\'utente (riutilizzabili quando pianifica i pasti), con i relativi ingredienti - diversi dai pasti già inseriti nel calendario (vedi pasti_pianificati).',
+            ),
+            self::definition(
+                'esercizi_disponibili',
+                'Gli esercizi nella libreria dell\'utente (nome, categoria, se richiedono attrezzi o si fanno a corpo libero) - da usare come esercizi disponibili quando si pianificano gli allenamenti con pianifica_allenamenti.',
+            ),
+            self::definition(
+                'allenamenti_pianificati',
+                'Gli allenamenti pianificati dall\'utente nei prossimi giorni, con gli esercizi (serie e ripetizioni) e quante serie sono già state completate.',
+                [
+                    'giorni' => ['type' => 'integer', 'description' => 'Quanti giorni in avanti guardare (default 7).'],
+                ],
             ),
             self::definition(
                 'quotazione_titolo',
@@ -156,6 +172,58 @@ class AiToolExecutor
                 ],
                 required: ['piatti'],
             ),
+            self::definition(
+                'crea_esercizi',
+                'Crea uno o più esercizi nella libreria "esercizi" dell\'utente (riutilizzabili in futuro quando pianifica gli allenamenti con pianifica_allenamenti) - NON li inserisce in un allenamento, per quello usa pianifica_allenamenti dopo averli creati. Usalo SOLO quando l\'utente chiede esplicitamente di aggiungerli/salvarli nella libreria esercizi.',
+                [
+                    'esercizi' => [
+                        'type' => 'array',
+                        'description' => 'Elenco degli esercizi da creare nella libreria.',
+                        'items' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'nome' => ['type' => 'string', 'description' => 'Nome dell\'esercizio.'],
+                                'categoria' => ['type' => 'string', 'enum' => ExerciseCategories::keys(), 'description' => 'Categoria (gruppo muscolare) dell\'esercizio.'],
+                                'corpo_libero' => ['type' => 'boolean', 'description' => 'true se l\'esercizio si fa a corpo libero (default), false se richiede attrezzi.'],
+                            ],
+                            'required' => ['nome', 'categoria'],
+                        ],
+                    ],
+                ],
+                required: ['esercizi'],
+            ),
+            self::definition(
+                'pianifica_allenamenti',
+                'Inserisce uno o più allenamenti nel piano settimanale dell\'utente (li fa comparire nella pagina Allenamenti), ciascuno con uno o più esercizi con serie e ripetizioni. Ogni esercizio nominato deve già esistere nella libreria dell\'utente (vedi esercizi_disponibili) - se manca, crealo prima con crea_esercizi. Usalo SOLO quando l\'utente chiede esplicitamente di pianificare/inserire gli allenamenti, non per suggerire un piano in chat.',
+                [
+                    'allenamenti' => [
+                        'type' => 'array',
+                        'description' => 'Elenco degli allenamenti da inserire, uno per giorno.',
+                        'items' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'data' => ['type' => 'string', 'description' => 'Data dell\'allenamento, formato YYYY-MM-DD.'],
+                                'titolo' => ['type' => 'string', 'description' => 'Nome opzionale dell\'allenamento.'],
+                                'esercizi' => [
+                                    'type' => 'array',
+                                    'description' => 'Esercizi dell\'allenamento, con serie e ripetizioni.',
+                                    'items' => [
+                                        'type' => 'object',
+                                        'properties' => [
+                                            'nome' => ['type' => 'string', 'description' => 'Nome dell\'esercizio, deve corrispondere a uno già nella libreria.'],
+                                            'serie' => ['type' => 'integer', 'description' => 'Numero di serie.'],
+                                            'ripetizioni' => ['type' => 'integer', 'description' => 'Numero di ripetizioni per serie.'],
+                                        ],
+                                        'required' => ['nome', 'serie', 'ripetizioni'],
+                                    ],
+                                ],
+                            ],
+                            'required' => ['data', 'esercizi'],
+                        ],
+                    ],
+                ],
+                required: ['allenamenti'],
+            ),
         ];
     }
 
@@ -199,9 +267,13 @@ class AiToolExecutor
             'pasti_pianificati' => $this->pastiPianificati($user, $arguments),
             'lista_della_spesa' => $this->listaDellaSpesa($user),
             'piatti_preconfigurati' => $this->piattiPreconfigurati($user),
+            'esercizi_disponibili' => $this->eserciziDisponibili($user),
+            'allenamenti_pianificati' => $this->allenamentiPianificati($user, $arguments),
             'quotazione_titolo' => $this->quotazioneTitolo($arguments),
             'pianifica_pasti' => $this->pianificaPasti($user, $arguments),
             'crea_piatti_preconfigurati' => $this->creaPiattiPreconfigurati($user, $arguments),
+            'crea_esercizi' => $this->creaEsercizi($user, $arguments),
+            'pianifica_allenamenti' => $this->pianificaAllenamenti($user, $arguments),
             default => ['errore' => "Tool sconosciuto: {$tool}"],
         };
     }
@@ -362,6 +434,50 @@ class AiToolExecutor
                 'categoria' => $dish->category,
                 'descrizione' => $dish->description,
                 'ingredienti' => $dish->ingredients->pluck('name')->all(),
+            ])->all(),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function eserciziDisponibili(User $user): array
+    {
+        $exercises = $user->exercises()->orderBy('name')->get();
+
+        return [
+            'esercizi' => $exercises->map(fn (Exercise $exercise) => [
+                'nome' => $exercise->name,
+                'categoria' => $exercise->category,
+                'corpo_libero' => ! $exercise->requires_equipment,
+            ])->all(),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $arguments
+     * @return array<string, mixed>
+     */
+    private function allenamentiPianificati(User $user, array $arguments): array
+    {
+        $days = (int) ($arguments['giorni'] ?? 7);
+
+        $workouts = $user->workouts()
+            ->whereBetween('workout_date', [Carbon::now()->toDateString(), Carbon::now()->addDays($days)->toDateString()])
+            ->with(['exercises.exercise', 'exercises.sets'])
+            ->orderBy('workout_date')
+            ->get();
+
+        return [
+            'allenamenti' => $workouts->map(fn (Workout $workout) => [
+                'data' => $workout->workout_date->format('Y-m-d'),
+                'titolo' => $workout->title,
+                'esercizi' => $workout->exercises->map(fn (WorkoutExercise $workoutExercise) => [
+                    'nome' => $workoutExercise->exercise->name,
+                    'serie' => $workoutExercise->sets_count,
+                    'ripetizioni' => $workoutExercise->reps_count,
+                    'serie_completate' => $workoutExercise->sets->where('completed', true)->count(),
+                ])->all(),
             ])->all(),
         ];
     }
@@ -567,6 +683,168 @@ class AiToolExecutor
                 'nome' => $dish->name,
                 'categoria' => $dish->category,
             ])->all(),
+            'errori' => $errors,
+        ];
+    }
+
+    /**
+     * Creates one or more exercises in the user's reusable "esercizi"
+     * library (App\Models\Exercise), mirroring ExerciseController::store()'s
+     * own field set. Skips a name already in the user's library (same
+     * duplicate-call protection as creaPiattiPreconfigurati()).
+     *
+     * @param  array<string, mixed>  $arguments
+     * @return array<string, mixed>
+     */
+    private function creaEsercizi(User $user, array $arguments): array
+    {
+        $requested = $arguments['esercizi'] ?? [];
+
+        if (! is_array($requested) || $requested === []) {
+            return ['errore' => 'Nessun esercizio fornito.'];
+        }
+
+        $created = [];
+        $errors = [];
+
+        foreach ($requested as $index => $exercise) {
+            $name = $exercise['nome'] ?? null;
+            $category = $exercise['categoria'] ?? null;
+
+            if (! is_string($name) || $name === '' || ! is_string($category) || ! array_key_exists($category, ExerciseCategories::ALL)) {
+                $errors[] = "Esercizio #{$index}: nome e categoria (valida) sono obbligatori.";
+
+                continue;
+            }
+
+            if ($user->exercises()->where('name', $name)->exists()) {
+                $errors[] = "Esercizio #{$index}: \"{$name}\" è già nella libreria, non duplicato.";
+
+                continue;
+            }
+
+            $requiresEquipment = ! (is_bool($exercise['corpo_libero'] ?? null) ? $exercise['corpo_libero'] : true);
+
+            $created[] = $user->exercises()->create([
+                'name' => $name,
+                'category' => $category,
+                'requires_equipment' => $requiresEquipment,
+            ]);
+        }
+
+        return [
+            'inseriti' => count($created),
+            'esercizi_inseriti' => collect($created)->map(fn (Exercise $exercise) => [
+                'nome' => $exercise->name,
+                'categoria' => $exercise->category,
+                'corpo_libero' => ! $exercise->requires_equipment,
+            ])->all(),
+            'errori' => $errors,
+        ];
+    }
+
+    /**
+     * Creates one or more workouts, mirroring WorkoutController::store()'s
+     * own find-or-create-the-day's-workout and append-exercises logic
+     * (called once per workout in the batch), including generating each
+     * exercise's individual WorkoutSet rows. Each exercise must already
+     * exist in the user's library - matched by name (case-insensitive) -
+     * so a model that hasn't created it yet gets a clear error back instead
+     * of silently guessing a category/equipment flag for a new one.
+     *
+     * @param  array<string, mixed>  $arguments
+     * @return array<string, mixed>
+     */
+    private function pianificaAllenamenti(User $user, array $arguments): array
+    {
+        $requested = $arguments['allenamenti'] ?? [];
+
+        if (! is_array($requested) || $requested === []) {
+            return ['errore' => 'Nessun allenamento fornito.'];
+        }
+
+        $exercisesByName = $user->exercises()->get()->keyBy(fn (Exercise $exercise) => mb_strtolower($exercise->name));
+
+        $created = [];
+        $errors = [];
+
+        foreach ($requested as $index => $workoutData) {
+            $date = $workoutData['data'] ?? null;
+            $exercises = $workoutData['esercizi'] ?? [];
+
+            if (! is_string($date) || ! is_array($exercises) || $exercises === []) {
+                $errors[] = "Allenamento #{$index}: servono data ed esercizi.";
+
+                continue;
+            }
+
+            try {
+                $date = Carbon::createFromFormat('Y-m-d', $date)->toDateString();
+            } catch (Throwable) {
+                $errors[] = "Allenamento #{$index}: data \"{$date}\" non valida, atteso formato YYYY-MM-DD.";
+
+                continue;
+            }
+
+            $workout = $user->workouts()->whereDate('workout_date', $date)->first();
+
+            if (! $workout) {
+                $workout = $user->workouts()->create([
+                    'workout_date' => $date,
+                    'title' => is_string($workoutData['titolo'] ?? null) ? $workoutData['titolo'] : null,
+                ]);
+            }
+
+            $nextPosition = 1 + ($workout->exercises()->max('position') ?? -1);
+            $addedExercises = [];
+
+            foreach ($exercises as $exerciseIndex => $exerciseData) {
+                $name = $exerciseData['nome'] ?? null;
+                $sets = $exerciseData['serie'] ?? null;
+                $reps = $exerciseData['ripetizioni'] ?? null;
+
+                if (! is_string($name) || ! is_int($sets) || $sets < 1 || ! is_int($reps) || $reps < 1) {
+                    $errors[] = "Allenamento #{$index}, esercizio #{$exerciseIndex}: servono nome, serie e ripetizioni valide.";
+
+                    continue;
+                }
+
+                $exercise = $exercisesByName->get(mb_strtolower($name));
+
+                if (! $exercise) {
+                    $errors[] = "Allenamento #{$index}: esercizio \"{$name}\" non trovato nella libreria - crealo prima con crea_esercizi.";
+
+                    continue;
+                }
+
+                if ($workout->exercises()->where('exercise_id', $exercise->id)->exists()) {
+                    $errors[] = "Allenamento #{$index}: \"{$name}\" è già in questo allenamento, non duplicato.";
+
+                    continue;
+                }
+
+                $workoutExercise = $workout->exercises()->create([
+                    'exercise_id' => $exercise->id,
+                    'sets_count' => $sets,
+                    'reps_count' => $reps,
+                    'position' => $nextPosition++,
+                ]);
+
+                for ($setNumber = 1; $setNumber <= $sets; $setNumber++) {
+                    $workoutExercise->sets()->create(['set_number' => $setNumber]);
+                }
+
+                $addedExercises[] = ['nome' => $exercise->name, 'serie' => $sets, 'ripetizioni' => $reps];
+            }
+
+            if ($addedExercises !== []) {
+                $created[] = ['data' => $date, 'esercizi' => $addedExercises];
+            }
+        }
+
+        return [
+            'inseriti' => count($created),
+            'allenamenti_inseriti' => $created,
             'errori' => $errors,
         ];
     }

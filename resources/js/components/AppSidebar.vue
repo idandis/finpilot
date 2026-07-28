@@ -9,6 +9,7 @@ import {
     LayoutGrid,
     PiggyBank,
     ShoppingCart,
+    Dumbbell,
     Sparkles,
     Tag,
     Tags,
@@ -42,6 +43,7 @@ import * as meals from '@/routes/meals';
 import * as passwords from '@/routes/passwords';
 import * as shoppingLists from '@/routes/shopping-lists';
 import * as tasks from '@/routes/tasks';
+import * as workouts from '@/routes/workouts';
 import type { NavItem } from '@/types';
 
 const aiNavItems: NavItem[] = [
@@ -105,6 +107,11 @@ const managementNavItems: NavItem[] = [
         title: 'Pasti',
         href: meals.index(),
         icon: UtensilsCrossed,
+    },
+    {
+        title: 'Allenamenti',
+        href: workouts.index(),
+        icon: Dumbbell,
     },
 ];
 

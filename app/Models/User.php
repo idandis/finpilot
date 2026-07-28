@@ -144,4 +144,20 @@ class User extends Authenticatable implements PasskeyUser
     {
         return $this->hasMany(AiConversation::class);
     }
+
+    /**
+     * @return HasMany<Workout, $this>
+     */
+    public function workouts(): HasMany
+    {
+        return $this->hasMany(Workout::class);
+    }
+
+    /**
+     * @return HasMany<Exercise, $this>
+     */
+    public function exercises(): HasMany
+    {
+        return $this->hasMany(Exercise::class);
+    }
 }
