@@ -3,6 +3,7 @@
 namespace App\Services\Finance;
 
 use App\Contracts\MarketPriceProvider;
+use App\Exceptions\Finance\MarketPriceProviderUnavailableException;
 use App\Models\InstrumentPrice;
 
 class InstrumentPriceRepository
@@ -12,6 +13,16 @@ class InstrumentPriceRepository
      * a refresh (subject to the caller's remaining daily call budget).
      */
     private const STALE_AFTER_HOURS = 24;
+
+    /**
+     * A cached intraday quote older than this is considered stale. Much
+     * shorter than STALE_AFTER_HOURS because this feeds a "current price"
+     * display, not the daily close - but still not too short, since the
+     * provider's own quote is itself only refreshed roughly once a minute
+     * and delayed ~15-20 min behind the real market, so polling much more
+     * often than this buys nothing.
+     */
+    private const REALTIME_STALE_AFTER_MINUTES = 10;
 
     public function __construct(private readonly MarketPriceProvider $provider) {}
 
@@ -62,7 +73,16 @@ class InstrumentPriceRepository
                     return $callsUsed;
                 }
 
-                $resolved = $this->provider->resolveSymbol($isin);
+                try {
+                    $resolved = $this->provider->resolveSymbol($isin);
+                } catch (MarketPriceProviderUnavailableException) {
+                    // Couldn't even attempt the call (missing API key, or
+                    // the global budget ran out between the caller's own
+                    // check above and this one) - transient, so don't spend
+                    // a call or mark this ISIN as permanently unresolved.
+                    return $callsUsed;
+                }
+
                 $callsUsed++;
                 $callsRemaining--;
 
@@ -104,5 +124,42 @@ class InstrumentPriceRepository
         }
 
         return $callsUsed;
+    }
+
+    /**
+     * Companion to refresh(): keeps a delayed intraday quote alongside the
+     * end-of-day close, for an instrument that already has a resolved
+     * symbol. Never attempts symbol resolution itself - refresh() owns
+     * that, once ever - so an ISIN with no resolved code/exchange yet, or
+     * one that failed resolution, is simply skipped here at no cost.
+     *
+     * $force skips the freshness check, same contract as refresh().
+     */
+    public function refreshRealtime(string $isin, int $callsRemaining, bool $force = false): int
+    {
+        $record = InstrumentPrice::query()->where('isin', $isin)->first();
+
+        if ($record === null || $record->resolution_failed || $record->code === null || $record->exchange === null) {
+            return 0;
+        }
+
+        $isFresh = ! $force
+            && $record->realtime_fetched_at !== null
+            && $record->realtime_fetched_at->diffInMinutes(now()) < self::REALTIME_STALE_AFTER_MINUTES;
+
+        if ($isFresh || $callsRemaining < 1) {
+            return 0;
+        }
+
+        $price = $this->provider->fetchRealtimePrice($record->code, $record->exchange);
+
+        if ($price !== null) {
+            $record->update([
+                'realtime_price' => $price->price,
+                'realtime_fetched_at' => now(),
+            ]);
+        }
+
+        return 1;
     }
 }

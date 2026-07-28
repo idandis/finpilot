@@ -9,6 +9,7 @@ import {
     LayoutGrid,
     PiggyBank,
     ShoppingCart,
+    Sparkles,
     Tag,
     Tags,
     TrendingUp,
@@ -29,6 +30,7 @@ import {
     SidebarSeparator,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import * as aiChat from '@/routes/ai-chat';
 import * as budgets from '@/routes/budgets';
 import * as cards from '@/routes/cards';
 import * as categories from '@/routes/categories';
@@ -41,6 +43,14 @@ import * as passwords from '@/routes/passwords';
 import * as shoppingLists from '@/routes/shopping-lists';
 import * as tasks from '@/routes/tasks';
 import type { NavItem } from '@/types';
+
+const aiNavItems: NavItem[] = [
+    {
+        title: 'AI',
+        href: aiChat.index(),
+        icon: Sparkles,
+    },
+];
 
 const mainNavItems: NavItem[] = [
     {
@@ -127,6 +137,8 @@ const footerNavItems: NavItem[] = [
         </SidebarHeader>
 
         <SidebarContent>
+            <NavMain :items="aiNavItems" label="Assistente" />
+            <SidebarSeparator />
             <NavMain :items="mainNavItems" label="Finanza" />
             <SidebarSeparator />
             <NavMain :items="managementNavItems" label="Gestione" />

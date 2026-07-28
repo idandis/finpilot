@@ -12,73 +12,87 @@ use Illuminate\Support\Facades\DB;
 class AccountBalanceCalculator
 {
     /**
-     * Current cash balance per financial account linked to the given cards,
-     * keyed by financial_account_id: initial_balance plus every
-     * income/expense transaction ever posted against ANY card on that
-     * account - not just the cards passed in, since a single account can
-     * also have an ordinary debit card whose spending affects the same cash
-     * pool. This backs the "saldo conto" figure shown alongside investment
-     * totals on the Investments page and the Dashboard.
+     * Current cash balance keyed per "balance bucket": a linked financial
+     * account's id (int) - shared by every card on that account, not just
+     * the ones passed in, since an ordinary debit card can draw from the
+     * same cash pool - or "card:{id}" for a standalone card with no linked
+     * account, whose balance is just its own transactions starting from
+     * zero (there's no initial_balance to draw from without an account).
+     * This backs the "saldo conto" figure shown alongside investment totals
+     * on the Investments page and the Dashboard, and works whether or not a
+     * card has a linked account.
      *
      * @param  Collection<int, Card>  $cards
-     * @return array<int, float>
+     * @return array<int|string, float>
      */
     public function calculate(Collection $cards): array
     {
         $accountIds = $cards->pluck('financial_account_id')->filter()->unique()->values();
+        $standaloneCardIds = $cards->whereNull('financial_account_id')->pluck('id')->values();
 
-        if ($accountIds->isEmpty()) {
-            return [];
+        $balances = [];
+
+        if ($accountIds->isNotEmpty()) {
+            $balances = FinancialAccount::query()
+                ->whereIn('id', $accountIds)
+                ->pluck('initial_balance', 'id')
+                ->map(fn ($initialBalance) => (float) $initialBalance)
+                ->all();
+
+            $cardToAccount = Card::query()
+                ->whereIn('financial_account_id', $accountIds)
+                ->pluck('financial_account_id', 'id');
+
+            Transaction::query()
+                ->whereIn('card_id', $cardToAccount->keys())
+                ->select('card_id', 'direction', DB::raw('SUM(amount) as total'))
+                ->groupBy('card_id', 'direction')
+                ->get()
+                ->each(function ($row) use (&$balances, $cardToAccount) {
+                    $accountId = $cardToAccount->get($row->card_id);
+
+                    if ($accountId === null) {
+                        return;
+                    }
+
+                    $delta = $row->direction === 'income' ? (float) $row->total : -(float) $row->total;
+                    $balances[$accountId] = ($balances[$accountId] ?? 0.0) + $delta;
+                });
         }
 
-        $balances = FinancialAccount::query()
-            ->whereIn('id', $accountIds)
-            ->pluck('initial_balance', 'id')
-            ->map(fn ($initialBalance) => (float) $initialBalance)
-            ->all();
+        foreach ($standaloneCardIds as $cardId) {
+            $balances["card:{$cardId}"] = 0.0;
+        }
 
-        $cardToAccount = Card::query()
-            ->whereIn('financial_account_id', $accountIds)
-            ->pluck('financial_account_id', 'id');
-
-        Transaction::query()
-            ->whereIn('card_id', $cardToAccount->keys())
-            ->select('card_id', 'direction', DB::raw('SUM(amount) as total'))
-            ->groupBy('card_id', 'direction')
-            ->get()
-            ->each(function ($row) use (&$balances, $cardToAccount) {
-                $accountId = $cardToAccount->get($row->card_id);
-
-                if ($accountId === null) {
-                    return;
-                }
-
-                $delta = $row->direction === 'income' ? (float) $row->total : -(float) $row->total;
-                $balances[$accountId] = ($balances[$accountId] ?? 0.0) + $delta;
-            });
+        if ($standaloneCardIds->isNotEmpty()) {
+            Transaction::query()
+                ->whereIn('card_id', $standaloneCardIds)
+                ->select('card_id', 'direction', DB::raw('SUM(amount) as total'))
+                ->groupBy('card_id', 'direction')
+                ->get()
+                ->each(function ($row) use (&$balances) {
+                    $delta = $row->direction === 'income' ? (float) $row->total : -(float) $row->total;
+                    $balances["card:{$row->card_id}"] += $delta;
+                });
+        }
 
         return $balances;
     }
 
     /**
      * Convenience wrapper for the common case: total balance across every
-     * distinct account linked to the given cards (e.g. all of a user's
-     * investment cards combined), null when none of them have a linked
-     * account at all.
+     * card passed in, whether or not it has a linked account - null only
+     * when there are no cards at all.
      *
      * @param  Collection<int, Card>  $cards
      */
     public function totalFor(Collection $cards): ?float
     {
-        $accountIds = $cards->pluck('financial_account_id')->filter()->unique();
-
-        if ($accountIds->isEmpty()) {
+        if ($cards->isEmpty()) {
             return null;
         }
 
-        $balances = $this->calculate($cards);
-
-        return $accountIds->sum(fn (int $accountId) => $balances[$accountId] ?? 0.0);
+        return round(array_sum($this->calculate($cards)), 2);
     }
 
     /**
@@ -91,28 +105,42 @@ class AccountBalanceCalculator
      *
      * @param  Collection<int, Card>  $cards
      * @param  Collection<int, string>  $dates  ascending 'Y-m-d' dates
-     * @return array<string, float|null> keyed by the given date strings, null when no account is linked
+     * @return array<string, float|null> keyed by the given date strings, null for every date only when there are no cards at all
      */
     public function historyAsOf(Collection $cards, Collection $dates): array
     {
-        $accountIds = $cards->pluck('financial_account_id')->filter()->unique()->values();
-
-        if ($accountIds->isEmpty()) {
+        if ($cards->isEmpty()) {
             return $dates->mapWithKeys(fn (string $date) => [$date => null])->all();
         }
 
-        $running = FinancialAccount::query()
-            ->whereIn('id', $accountIds)
-            ->pluck('initial_balance', 'id')
-            ->map(fn ($initialBalance) => (float) $initialBalance)
+        $accountIds = $cards->pluck('financial_account_id')->filter()->unique()->values();
+        $standaloneCardIds = $cards->whereNull('financial_account_id')->pluck('id')->values();
+
+        $running = [];
+
+        if ($accountIds->isNotEmpty()) {
+            $running = FinancialAccount::query()
+                ->whereIn('id', $accountIds)
+                ->pluck('initial_balance', 'id')
+                ->map(fn ($initialBalance) => (float) $initialBalance)
+                ->all();
+        }
+
+        foreach ($standaloneCardIds as $cardId) {
+            $running["card:{$cardId}"] = 0.0;
+        }
+
+        $cardKeys = Card::query()
+            ->whereIn('financial_account_id', $accountIds)
+            ->pluck('financial_account_id', 'id')
             ->all();
 
-        $cardToAccount = Card::query()
-            ->whereIn('financial_account_id', $accountIds)
-            ->pluck('financial_account_id', 'id');
+        foreach ($standaloneCardIds as $cardId) {
+            $cardKeys[$cardId] = "card:{$cardId}";
+        }
 
         $transactions = Transaction::query()
-            ->whereIn('card_id', $cardToAccount->keys())
+            ->whereIn('card_id', array_keys($cardKeys))
             ->orderBy('transaction_date')
             ->get(['card_id', 'transaction_date', 'amount', 'direction'])
             ->all();
@@ -125,11 +153,11 @@ class AccountBalanceCalculator
 
             while ($cursor < count($transactions) && Carbon::parse($transactions[$cursor]->transaction_date)->lte($asOf)) {
                 $transaction = $transactions[$cursor];
-                $accountId = $cardToAccount->get($transaction->card_id);
+                $key = $cardKeys[$transaction->card_id] ?? null;
 
-                if ($accountId !== null) {
+                if ($key !== null) {
                     $delta = $transaction->direction === 'income' ? (float) $transaction->amount : -(float) $transaction->amount;
-                    $running[$accountId] = ($running[$accountId] ?? 0.0) + $delta;
+                    $running[$key] = ($running[$key] ?? 0.0) + $delta;
                 }
 
                 $cursor++;

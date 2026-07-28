@@ -5,6 +5,7 @@ namespace Tests\Feature\Finance;
 use App\Contracts\FetchedPrice;
 use App\Contracts\MarketPriceProvider;
 use App\Contracts\ResolvedSymbol;
+use App\Exceptions\Finance\MarketPriceProviderUnavailableException;
 use App\Models\InstrumentPrice;
 use App\Services\Finance\InstrumentPriceRepository;
 use Carbon\CarbonInterface;
@@ -122,6 +123,21 @@ class InstrumentPriceRepositoryTest extends TestCase
         $this->assertSame(0, $provider->resolveCalls);
     }
 
+    public function test_a_resolution_that_could_not_be_attempted_is_not_marked_as_permanently_failed()
+    {
+        $provider = new FakeUnavailableMarketPriceProvider;
+        $repository = new InstrumentPriceRepository($provider);
+
+        $callsUsed = $repository->refresh('IE00BK5BQT80', callsRemaining: 10);
+
+        $this->assertSame(0, $callsUsed);
+        $this->assertDatabaseHas('instrument_prices', [
+            'isin' => 'IE00BK5BQT80',
+            'code' => null,
+            'resolution_failed' => false,
+        ]);
+    }
+
     public function test_a_crypto_isin_resolves_locally_without_spending_a_search_call()
     {
         $provider = new FakeMarketPriceProvider(
@@ -190,6 +206,95 @@ class InstrumentPriceRepositoryTest extends TestCase
         $this->assertSame(0, $provider->resolveCalls);
         $this->assertDatabaseHas('instrument_prices', ['isin' => 'IE00BK5BQT80', 'code' => null]);
     }
+
+    public function test_realtime_refresh_updates_the_intraday_quote_for_an_already_resolved_instrument()
+    {
+        InstrumentPrice::factory()->create([
+            'isin' => 'IE00BK5BQT80',
+            'code' => 'VWCE',
+            'exchange' => 'XETRA',
+            'last_price' => 100,
+        ]);
+
+        $provider = new FakeMarketPriceProvider(
+            realtimePrice: new FetchedPrice(price: 101.5, date: Carbon::parse('2026-07-28 12:00:00')),
+        );
+
+        $repository = new InstrumentPriceRepository($provider);
+        $callsUsed = $repository->refreshRealtime('IE00BK5BQT80', callsRemaining: 10);
+
+        $this->assertSame(1, $callsUsed);
+        $this->assertSame(1, $provider->realtimeCalls);
+        $this->assertDatabaseHas('instrument_prices', [
+            'isin' => 'IE00BK5BQT80',
+            'realtime_price' => 101.5,
+            // The EOD close is untouched - the two quotes are kept side by
+            // side, not one replacing the other.
+            'last_price' => 100,
+        ]);
+    }
+
+    public function test_realtime_refresh_does_nothing_for_an_unresolved_instrument()
+    {
+        InstrumentPrice::factory()->create([
+            'isin' => 'IE00BK5BQT80',
+            'code' => null,
+            'exchange' => null,
+        ]);
+
+        $provider = new FakeMarketPriceProvider(
+            realtimePrice: new FetchedPrice(price: 101.5, date: Carbon::parse('2026-07-28 12:00:00')),
+        );
+
+        $repository = new InstrumentPriceRepository($provider);
+        $callsUsed = $repository->refreshRealtime('IE00BK5BQT80', callsRemaining: 10);
+
+        $this->assertSame(0, $callsUsed);
+        $this->assertSame(0, $provider->realtimeCalls);
+    }
+
+    public function test_a_fresh_realtime_quote_is_not_refreshed_again_within_the_stale_window()
+    {
+        InstrumentPrice::factory()->create([
+            'isin' => 'IE00BK5BQT80',
+            'code' => 'VWCE',
+            'exchange' => 'XETRA',
+            'realtime_price' => 100,
+            'realtime_fetched_at' => now(),
+        ]);
+
+        $provider = new FakeMarketPriceProvider(
+            realtimePrice: new FetchedPrice(price: 105.0, date: Carbon::parse('2026-07-28 12:00:00')),
+        );
+
+        $repository = new InstrumentPriceRepository($provider);
+        $callsUsed = $repository->refreshRealtime('IE00BK5BQT80', callsRemaining: 10);
+
+        $this->assertSame(0, $callsUsed);
+        $this->assertSame(0, $provider->realtimeCalls);
+        $this->assertDatabaseHas('instrument_prices', ['isin' => 'IE00BK5BQT80', 'realtime_price' => 100]);
+    }
+
+    public function test_force_refreshes_a_fresh_realtime_quote_anyway()
+    {
+        InstrumentPrice::factory()->create([
+            'isin' => 'IE00BK5BQT80',
+            'code' => 'VWCE',
+            'exchange' => 'XETRA',
+            'realtime_price' => 100,
+            'realtime_fetched_at' => now(),
+        ]);
+
+        $provider = new FakeMarketPriceProvider(
+            realtimePrice: new FetchedPrice(price: 105.0, date: Carbon::parse('2026-07-28 12:00:00')),
+        );
+
+        $repository = new InstrumentPriceRepository($provider);
+        $callsUsed = $repository->refreshRealtime('IE00BK5BQT80', callsRemaining: 10, force: true);
+
+        $this->assertSame(1, $callsUsed);
+        $this->assertDatabaseHas('instrument_prices', ['isin' => 'IE00BK5BQT80', 'realtime_price' => 105.0]);
+    }
 }
 
 class FakeMarketPriceProvider implements MarketPriceProvider
@@ -198,9 +303,12 @@ class FakeMarketPriceProvider implements MarketPriceProvider
 
     public int $fetchCalls = 0;
 
+    public int $realtimeCalls = 0;
+
     public function __construct(
         private readonly ?ResolvedSymbol $resolved = null,
         private readonly ?FetchedPrice $price = null,
+        private readonly ?FetchedPrice $realtimePrice = null,
     ) {}
 
     public function resolveSymbol(string $isin): ?ResolvedSymbol
@@ -215,6 +323,46 @@ class FakeMarketPriceProvider implements MarketPriceProvider
         $this->fetchCalls++;
 
         return $this->price;
+    }
+
+    public function fetchRealtimePrice(string $code, string $exchange): ?FetchedPrice
+    {
+        $this->realtimeCalls++;
+
+        return $this->realtimePrice;
+    }
+
+    public function fetchHistory(string $code, string $exchange, CarbonInterface $from, CarbonInterface $to): ?array
+    {
+        return null;
+    }
+
+    public function fetchNews(string $code, string $exchange): ?array
+    {
+        return null;
+    }
+
+    public function fetchFundamentals(string $symbol): ?array
+    {
+        return null;
+    }
+}
+
+class FakeUnavailableMarketPriceProvider implements MarketPriceProvider
+{
+    public function resolveSymbol(string $isin): ?ResolvedSymbol
+    {
+        throw new MarketPriceProviderUnavailableException;
+    }
+
+    public function fetchPrice(string $code, string $exchange): ?FetchedPrice
+    {
+        return null;
+    }
+
+    public function fetchRealtimePrice(string $code, string $exchange): ?FetchedPrice
+    {
+        return null;
     }
 
     public function fetchHistory(string $code, string $exchange, CarbonInterface $from, CarbonInterface $to): ?array

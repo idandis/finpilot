@@ -357,7 +357,6 @@ function openAddDialog(
     <div class="flex flex-col space-y-8 p-4">
         <div class="flex flex-wrap items-start justify-between gap-4">
             <div class="space-y-2">
-                <h2 class="text-xl font-semibold tracking-tight">Pasti</h2>
                 <div
                     class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
                 >

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Finance;
 
+use App\Exceptions\Finance\MarketPriceProviderUnavailableException;
 use App\Services\Finance\EodhdCallBudget;
 use App\Services\Finance\EodhdMarketPriceProvider;
 use Illuminate\Support\Carbon;
@@ -126,11 +127,94 @@ class EodhdMarketPriceProviderTest extends TestCase
 
         $provider = new EodhdMarketPriceProvider('fake-token', new EodhdCallBudget(dailyLimit: 0));
 
-        $this->assertNull($provider->resolveSymbol('IE00BK5BQT80'));
+        $this->expectException(MarketPriceProviderUnavailableException::class);
+        $provider->resolveSymbol('IE00BK5BQT80');
+    }
+
+    public function test_it_refuses_to_fetch_when_the_daily_budget_is_exhausted()
+    {
+        Http::fake();
+
+        $provider = new EodhdMarketPriceProvider('fake-token', new EodhdCallBudget(dailyLimit: 0));
+
         $this->assertNull($provider->fetchPrice('VWCE', 'XETRA'));
+        $this->assertNull($provider->fetchRealtimePrice('VWCE', 'XETRA'));
         $this->assertNull($provider->fetchHistory('VWCE', 'XETRA', Carbon::parse('2026-01-01'), Carbon::parse('2026-07-23')));
         $this->assertNull($provider->fetchNews('VWCE', 'XETRA'));
         Http::assertNothingSent();
+    }
+
+    public function test_it_fetches_a_delayed_intraday_quote()
+    {
+        Http::fake([
+            'eodhd.com/api/real-time/*' => Http::response([
+                'code' => 'AAPL.US',
+                'timestamp' => 1785184080,
+                'open' => 334.54,
+                'high' => 339.57,
+                'low' => 334.02,
+                'close' => 336.91,
+                'previousClose' => 333.02,
+            ]),
+        ]);
+
+        $provider = $this->provider();
+        $price = $provider->fetchRealtimePrice('AAPL', 'US');
+
+        $this->assertNotNull($price);
+        $this->assertSame(336.91, $price->price);
+        $this->assertSame(1785184080, $price->date->getTimestamp());
+    }
+
+    public function test_it_returns_null_when_the_realtime_request_fails()
+    {
+        Http::fake([
+            'eodhd.com/api/real-time/*' => Http::response(null, 500),
+        ]);
+
+        $provider = $this->provider();
+
+        $this->assertNull($provider->fetchRealtimePrice('AAPL', 'US'));
+    }
+
+    public function test_it_returns_null_when_the_realtime_quote_has_no_close()
+    {
+        Http::fake([
+            'eodhd.com/api/real-time/*' => Http::response(['code' => 'NA']),
+        ]);
+
+        $provider = $this->provider();
+
+        $this->assertNull($provider->fetchRealtimePrice('XX', 'US'));
+    }
+
+    /**
+     * When a resolved symbol has no real-time coverage on EODHD's plan
+     * (observed for at least one LSE cross-listing), the endpoint still
+     * responds 200 but with the literal string "NA" for every numeric
+     * field instead of omitting them or failing - naively casting that to
+     * float/int would silently store a bogus price of 0 at the epoch.
+     */
+    public function test_it_returns_null_when_the_realtime_quote_fields_are_the_na_sentinel()
+    {
+        Http::fake([
+            'eodhd.com/api/real-time/*' => Http::response([
+                'code' => '0NUX.LSE',
+                'timestamp' => 'NA',
+                'open' => 'NA',
+                'high' => 'NA',
+                'low' => 'NA',
+                'close' => 'NA',
+                'volume' => 'NA',
+                'previousClose' => 122.15,
+                'change' => 'NA',
+                'change_p' => 'NA',
+            ]),
+        ]);
+
+        $provider = $this->provider();
+
+        $this->assertNull($provider->fetchRealtimePrice('0NUX', 'LSE'));
     }
 
     public function test_it_fetches_a_full_price_history_with_from_and_to_params()

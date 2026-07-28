@@ -155,6 +155,11 @@ class FakeCompanyAnalysisHistoryProvider implements MarketPriceProvider
         return null;
     }
 
+    public function fetchRealtimePrice(string $code, string $exchange): ?FetchedPrice
+    {
+        return null;
+    }
+
     public function fetchPrice(string $code, string $exchange): ?FetchedPrice
     {
         return null;

@@ -12,6 +12,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('transactions', function (Blueprint $table) {
+            // MySQL refuses to drop an index still backing a foreign key,
+            // so the constraint has to go first (and be recreated below) -
+            // harmless on SQLite, which doesn't enforce this.
+            $table->dropForeign(['financial_account_id']);
             $table->dropUnique(['financial_account_id', 'dedup_hash']);
             $table->dropIndex(['financial_account_id', 'transaction_date']);
         });
@@ -21,6 +25,7 @@ return new class extends Migration
         });
 
         Schema::table('transactions', function (Blueprint $table) {
+            $table->foreign('financial_account_id')->references('id')->on('financial_accounts')->cascadeOnDelete();
             $table->unique(['card_id', 'dedup_hash']);
             $table->index(['card_id', 'transaction_date']);
         });
@@ -32,6 +37,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('transactions', function (Blueprint $table) {
+            $table->dropForeign(['financial_account_id']);
             $table->dropUnique(['card_id', 'dedup_hash']);
             $table->dropIndex(['card_id', 'transaction_date']);
         });
@@ -41,6 +47,7 @@ return new class extends Migration
         });
 
         Schema::table('transactions', function (Blueprint $table) {
+            $table->foreign('financial_account_id')->references('id')->on('financial_accounts')->cascadeOnDelete();
             $table->unique(['financial_account_id', 'dedup_hash']);
             $table->index(['financial_account_id', 'transaction_date']);
         });

@@ -44,23 +44,23 @@ function destroyList(list: ShoppingList) {
             Nessuna lista ancora: creane una qui sopra per iniziare.
         </div>
 
-        <div v-else class="flex flex-wrap gap-4">
+        <div v-else class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             <Link
                 v-for="list in lists"
                 :key="list.id"
                 :href="shoppingListRoutes.show(list.id)"
-                class="group relative w-48 shrink-0 rounded-sm bg-amber-100 p-4 shadow-md transition-transform hover:-translate-y-0.5 hover:shadow-lg dark:bg-amber-900/40"
+                class="group relative rounded-xl bg-muted p-3 transition hover:bg-muted/70"
             >
                 <button
                     type="button"
-                    class="absolute top-2 right-2 rounded-sm p-1 text-amber-900/50 opacity-0 group-hover:opacity-100 hover:bg-amber-900/10 hover:text-amber-900 dark:text-amber-100/50 dark:hover:bg-amber-100/10 dark:hover:text-amber-100"
+                    class="absolute top-2 right-2 rounded-sm p-1 text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
                     title="Elimina lista"
                     @click.stop.prevent="destroyList(list)"
                 >
                     <Trash2 class="size-4" />
                 </button>
-                <p class="pr-6 font-medium break-words text-amber-950 dark:text-amber-50">{{ list.name }}</p>
-                <p class="mt-2 text-xs text-amber-900/70 dark:text-amber-100/70">
+                <p class="pr-6 font-medium break-words">{{ list.name }}</p>
+                <p class="mt-1 text-xs text-muted-foreground">
                     {{ list.items.length === 1 ? '1 prodotto' : `${list.items.length} prodotti` }}
                 </p>
             </Link>

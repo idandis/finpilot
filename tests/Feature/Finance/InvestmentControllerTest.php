@@ -249,6 +249,84 @@ class InvestmentControllerTest extends TestCase
         );
     }
 
+    public function test_a_fresher_realtime_quote_is_preferred_over_the_eod_close()
+    {
+        $user = User::factory()->create();
+        $account = FinancialAccount::factory()->for($user)->create();
+        $card = Card::factory()->for($account, 'financialAccount')->create(['user_id' => $user->id, 'is_investment_card' => true]);
+        $investments = TransactionCategory::factory()->create(['user_id' => null, 'name' => 'Investimenti']);
+
+        Transaction::factory()->for($account, 'financialAccount')->create([
+            'card_id' => $card->id,
+            'transaction_category_id' => $investments->id,
+            'transaction_date' => '2026-07-05',
+            'description' => 'Buy trade IE00BK5BQT80 Vanguard FTSE All-World, quantity: 2.0',
+            'isin' => 'IE00BK5BQT80',
+            'quantity' => 2.0,
+            'direction' => 'expense',
+            'amount' => 200,
+        ]);
+
+        InstrumentPrice::factory()->create([
+            'isin' => 'IE00BK5BQT80',
+            'last_price' => 120,
+            'currency' => 'EUR',
+            'price_date' => '2026-07-27',
+            'fetched_at' => '2026-07-28 06:00:00',
+            'realtime_price' => 125,
+            'realtime_fetched_at' => '2026-07-28 12:30:00',
+        ]);
+
+        $response = $this->actingAs($user)->get(route('investments.index'));
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->where('tabs.0.positions.open.0.current_price', 125)
+            ->where('tabs.0.positions.open.0.market_value', 250)
+            ->where('tabs.0.positions.open.0.price_is_realtime', true)
+        );
+    }
+
+    public function test_a_stale_realtime_quote_does_not_shadow_a_newer_eod_close()
+    {
+        $user = User::factory()->create();
+        $account = FinancialAccount::factory()->for($user)->create();
+        $card = Card::factory()->for($account, 'financialAccount')->create(['user_id' => $user->id, 'is_investment_card' => true]);
+        $investments = TransactionCategory::factory()->create(['user_id' => null, 'name' => 'Investimenti']);
+
+        Transaction::factory()->for($account, 'financialAccount')->create([
+            'card_id' => $card->id,
+            'transaction_category_id' => $investments->id,
+            'transaction_date' => '2026-07-05',
+            'description' => 'Buy trade IE00BK5BQT80 Vanguard FTSE All-World, quantity: 2.0',
+            'isin' => 'IE00BK5BQT80',
+            'quantity' => 2.0,
+            'direction' => 'expense',
+            'amount' => 200,
+        ]);
+
+        // A realtime quote from a week ago (e.g. the feature was polled
+        // once and then stopped) must not permanently outrank an EOD close
+        // that has since been refreshed more recently.
+        InstrumentPrice::factory()->create([
+            'isin' => 'IE00BK5BQT80',
+            'last_price' => 120,
+            'currency' => 'EUR',
+            'price_date' => '2026-07-27',
+            'fetched_at' => '2026-07-28 06:00:00',
+            'realtime_price' => 125,
+            'realtime_fetched_at' => '2026-07-20 12:30:00',
+        ]);
+
+        $response = $this->actingAs($user)->get(route('investments.index'));
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->where('tabs.0.positions.open.0.current_price', 120)
+            ->where('tabs.0.positions.open.0.price_is_realtime', false)
+        );
+    }
+
     public function test_it_does_not_convert_a_non_eur_price_without_a_cached_exchange_rate()
     {
         $user = User::factory()->create();
@@ -872,7 +950,7 @@ class InvestmentControllerTest extends TestCase
         );
     }
 
-    public function test_it_reports_a_null_wealth_history_when_no_account_is_linked()
+    public function test_it_reports_wealth_history_for_a_standalone_card_using_a_zero_based_balance()
     {
         $user = User::factory()->create();
         $card = Card::factory()->create(['user_id' => $user->id, 'is_investment_card' => true, 'financial_account_id' => null]);
@@ -890,12 +968,25 @@ class InvestmentControllerTest extends TestCase
             'amount' => 200,
         ]);
 
+        InstrumentPrice::factory()->create(['isin' => 'IE00BK5BQT80', 'currency' => 'EUR']);
+        InstrumentPriceHistory::factory()->create(['isin' => 'IE00BK5BQT80', 'price_date' => '2026-01-05', 'close_price' => 100.0]);
+        InstrumentPriceHistory::factory()->create(['isin' => 'IE00BK5BQT80', 'price_date' => '2026-03-01', 'close_price' => 120.0]);
+
         $response = $this->actingAs($user)->get(route('investments.index'));
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->where('tabs.0.wealthHistory', null)
-            ->where('tabs.1.wealthHistory', null)
+            ->where('tabs.1.accountBalance', -200)
+            ->where('tabs.1.wealthHistory.points', function (Collection $points) {
+                $marchPoint = $points->first(fn ($point) => $point['date'] >= '2026-03-01');
+                $this->assertNotNull($marchPoint);
+                // Standalone card balance as of that date: 0 - 200 buy = -200 (no account to draw an initial balance from).
+                $this->assertEquals(-200.0, $marchPoint['invested']);
+                // Net worth: 240 market value (2 x 120) - 200 cash spent.
+                $this->assertEquals(40.0, $marchPoint['market_value']);
+
+                return true;
+            })
         );
     }
 
@@ -936,7 +1027,7 @@ class InvestmentControllerTest extends TestCase
         );
     }
 
-    public function test_it_reports_a_null_account_balance_when_the_card_has_no_linked_account()
+    public function test_it_reports_a_zero_based_account_balance_when_the_card_has_no_linked_account()
     {
         $user = User::factory()->create();
         Card::factory()->create(['user_id' => $user->id, 'is_investment_card' => true, 'financial_account_id' => null]);
@@ -946,8 +1037,8 @@ class InvestmentControllerTest extends TestCase
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->where('tabs.0.accountBalance', null)
-            ->where('tabs.1.accountBalance', null)
+            ->where('tabs.0.accountBalance', 0)
+            ->where('tabs.1.accountBalance', 0)
         );
     }
 
@@ -981,6 +1072,23 @@ class InvestmentControllerTest extends TestCase
     public function test_guests_cannot_trigger_a_price_refresh()
     {
         $response = $this->post(route('investments.refresh'));
+
+        $response->assertRedirect(route('login'));
+    }
+
+    public function test_a_user_can_manually_trigger_a_realtime_price_refresh()
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->post(route('investments.refresh-realtime'));
+
+        $response->assertRedirect();
+        $response->assertInertiaFlash('toast');
+    }
+
+    public function test_guests_cannot_trigger_a_realtime_price_refresh()
+    {
+        $response = $this->post(route('investments.refresh-realtime'));
 
         $response->assertRedirect(route('login'));
     }

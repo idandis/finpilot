@@ -136,4 +136,12 @@ class User extends Authenticatable implements PasskeyUser
     {
         return $this->hasMany(Dish::class);
     }
+
+    /**
+     * @return HasMany<AiConversation, $this>
+     */
+    public function aiConversations(): HasMany
+    {
+        return $this->hasMany(AiConversation::class);
+    }
 }

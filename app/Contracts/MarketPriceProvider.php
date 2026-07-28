@@ -9,7 +9,11 @@ interface MarketPriceProvider
     /**
      * Resolve an ISIN to a tradable symbol (code + exchange) on this
      * provider. Returns null if the ISIN cannot be resolved (unsupported
-     * instrument/market on this provider's plan). Costs one API call.
+     * instrument/market on this provider's plan) - a genuine, permanent
+     * failure the caller may cache. Throws MarketPriceProviderUnavailableException
+     * when the call couldn't even be attempted (missing API key, or no
+     * budget left) - that's transient, not a resolution failure, and must
+     * not be cached as one. Costs one API call, only when actually attempted.
      */
     public function resolveSymbol(string $isin): ?ResolvedSymbol;
 
@@ -19,6 +23,18 @@ interface MarketPriceProvider
      * Costs one API call.
      */
     public function fetchPrice(string $code, string $exchange): ?FetchedPrice;
+
+    /**
+     * Fetch a delayed intraday quote for an already-resolved symbol -
+     * refreshed roughly every minute upstream but itself ~15-20 min behind
+     * the real market (per-provider delay), unlike fetchPrice() which only
+     * ever reflects the last full trading session's close. $date on the
+     * returned FetchedPrice is the quote's own timestamp, not just a
+     * calendar date. Returns null on failure (rate limited, symbol
+     * delisted, market data not covered by this plan, etc). Costs one API
+     * call.
+     */
+    public function fetchRealtimePrice(string $code, string $exchange): ?FetchedPrice;
 
     /**
      * Fetch the full daily close-price history for an already-resolved

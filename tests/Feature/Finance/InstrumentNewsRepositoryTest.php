@@ -220,6 +220,11 @@ class FakeNewsProvider implements MarketPriceProvider
         return null;
     }
 
+    public function fetchRealtimePrice(string $code, string $exchange): ?FetchedPrice
+    {
+        return null;
+    }
+
     public function fetchHistory(string $code, string $exchange, CarbonInterface $from, CarbonInterface $to): ?array
     {
         return null;

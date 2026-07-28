@@ -131,6 +131,8 @@ export type OpenInvestmentPosition = {
     price_currency: string | null;
     current_price_original: number | null;
     market_value_original: number | null;
+    price_is_realtime: boolean;
+    realtime_price_at: string | null;
     realized_gain: number;
 };
 

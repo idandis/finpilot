@@ -32,21 +32,34 @@ defineOptions({
         <div class="flex items-start justify-between gap-4">
             <Heading
                 title="Investimenti"
-                description="Flusso di cassa verso gli investimenti e le posizioni aperte/chiuse per strumento. Il valore di mercato delle posizioni aperte è aggiornato al massimo una volta al giorno; se non disponibile per uno strumento, viene mostrato solo il costo storico."
+                description=""
             />
-            <Form
-                v-bind="InvestmentController.refresh.form()"
-                v-slot="{ processing }"
-            >
-                <Button
-                    type="submit"
-                    variant="outline"
-                    :disabled="processing"
-                    class="shrink-0"
+            <div class="flex shrink-0 gap-2">
+                <Form
+                    v-bind="InvestmentController.refresh.form()"
+                    v-slot="{ processing }"
                 >
-                    {{ processing ? 'Aggiornamento…' : 'Aggiorna ora' }}
-                </Button>
-            </Form>
+                    <Button
+                        type="submit"
+                        variant="outline"
+                        :disabled="processing"
+                    >
+                        {{ processing ? 'Aggiornamento…' : 'Aggiorna chiusura' }}
+                    </Button>
+                </Form>
+                <Form
+                    v-bind="InvestmentController.refreshRealtime.form()"
+                    v-slot="{ processing }"
+                >
+                    <Button
+                        type="submit"
+                        variant="outline"
+                        :disabled="processing"
+                    >
+                        {{ processing ? 'Aggiornamento…' : 'Aggiorna realtime' }}
+                    </Button>
+                </Form>
+            </div>
         </div>
 
         <Tabs :default-value="props.tabs[0].id">
@@ -74,7 +87,7 @@ defineOptions({
                 <Tabs default-value="positions">
                     <TabsList>
                         <TabsTrigger value="cash-flow"
-                            >Flusso di cassa</TabsTrigger
+                            >Bilancio</TabsTrigger
                         >
                         <TabsTrigger value="positions">Posizioni</TabsTrigger>
                         <TabsTrigger value="composition"

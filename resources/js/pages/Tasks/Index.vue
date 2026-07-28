@@ -128,7 +128,6 @@ const isAddTaskOpen = ref(false);
     <div class="flex flex-col space-y-6 p-4 md:flex-1 md:min-h-0">
         <div class="flex flex-wrap items-start justify-between gap-4">
             <div class="space-y-0.5">
-                <h2 class="text-xl font-semibold tracking-tight">Task</h2>
                 <div class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                     <Button variant="outline" size="icon-sm" title="Giorno precedente" @click="goToDate(previousDate)">
                         <ChevronLeft />

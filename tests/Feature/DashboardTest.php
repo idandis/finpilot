@@ -115,4 +115,23 @@ class DashboardTest extends TestCase
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page->where('accountBalance', null));
     }
+
+    public function test_it_reports_a_zero_based_balance_for_a_standalone_investment_card()
+    {
+        $user = User::factory()->create();
+        $card = Card::factory()->create(['user_id' => $user->id, 'is_investment_card' => true, 'financial_account_id' => null]);
+
+        Transaction::factory()->create([
+            'financial_account_id' => null,
+            'card_id' => $card->id,
+            'transaction_date' => '2026-07-05',
+            'direction' => 'income',
+            'amount' => 50,
+        ]);
+
+        $response = $this->actingAs($user)->get(route('dashboard'));
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page->where('accountBalance', 50));
+    }
 }

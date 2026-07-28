@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use App\Contracts\FundamentalDataProvider;
 use App\Contracts\MarketPriceProvider;
+use App\Services\Ai\AiToolExecutor;
+use App\Services\Ai\OpenAiChatService;
 use App\Services\Finance\EodhdCallBudget;
 use App\Services\Finance\EodhdMarketPriceProvider;
 use App\Services\Finance\FmpFundamentalDataProvider;
@@ -31,6 +33,12 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->bind(FundamentalDataProvider::class, fn () => new FmpFundamentalDataProvider(
             config('services.fmp.api_key'),
+        ));
+
+        $this->app->bind(OpenAiChatService::class, fn ($app) => new OpenAiChatService(
+            config('services.openai.api_key'),
+            config('services.openai.model', 'gpt-4o-mini'),
+            $app->make(AiToolExecutor::class),
         ));
     }
 

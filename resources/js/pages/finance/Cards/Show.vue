@@ -161,6 +161,13 @@ function saveDescription(transaction: Transaction) {
     );
 }
 
+function signedAmount(transaction: Transaction) {
+    return (
+        Number(transaction.amount) *
+        (transaction.direction === 'expense' ? -1 : 1)
+    );
+}
+
 function destroyTransaction(transaction: Transaction) {
     if (confirm('Eliminare questa transazione?')) {
         router.delete(transactionRoutes.destroy(transaction.id).url, {
@@ -181,16 +188,16 @@ function destroyAllTransactions() {
 <template>
     <Head :title="`${card.name} · ${monthLabel}`" />
 
-    <div class="mx-auto flex w-full max-w-[64rem] flex-col gap-6 p-4">
-        <div class="grid gap-6 lg:grid-cols-[300px_1fr]">
-            <div class="space-y-4">
+    <div class="mx-auto flex w-full max-w-[64rem] min-w-0 flex-col gap-6 overflow-x-hidden p-4">
+        <div class="grid min-w-0 gap-6 lg:grid-cols-[300px_1fr]">
+            <div class="min-w-0 space-y-4">
                 <BankCard :card="card" />
                 <Button as-child variant="outline" size="sm" class="w-full">
                     <Link :href="cardRoutes.edit(card.id)">Modifica carta</Link>
                 </Button>
             </div>
 
-            <div class="space-y-6">
+            <div class="min-w-0 space-y-6">
                 <div class="flex flex-wrap items-center justify-between gap-4">
                     <Heading title="Movimenti" :description="card.name" />
                     <div class="flex items-center gap-2">
@@ -303,119 +310,252 @@ function destroyAllTransactions() {
                             selezionati.
                         </div>
 
-                        <Table v-else>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Data</TableHead>
-                                    <TableHead>Descrizione</TableHead>
-                                    <TableHead>Categoria</TableHead>
-                                    <TableHead class="text-right"
-                                        >Importo</TableHead
-                                    >
-                                    <TableHead class="text-right"
-                                        >Azioni</TableHead
-                                    >
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                <TableRow
+                        <template v-else>
+                            <div class="hidden md:block">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Data</TableHead>
+                                            <TableHead>Descrizione</TableHead>
+                                            <TableHead>Categoria</TableHead>
+                                            <TableHead class="text-right"
+                                                >Importo</TableHead
+                                            >
+                                            <TableHead class="text-right"
+                                                >Azioni</TableHead
+                                            >
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        <TableRow
+                                            v-for="transaction in filteredTransactions"
+                                            :key="transaction.id"
+                                        >
+                                            <TableCell>{{
+                                                formatDate(
+                                                    transaction.transaction_date,
+                                                )
+                                            }}</TableCell>
+                                            <TableCell class="max-w-64">
+                                                <input
+                                                    v-if="
+                                                        editingId ===
+                                                        transaction.id
+                                                    "
+                                                    v-model="editingDescription"
+                                                    type="text"
+                                                    autofocus
+                                                    class="h-8 w-full rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                                    @keyup.enter="
+                                                        saveDescription(
+                                                            transaction,
+                                                        )
+                                                    "
+                                                    @keyup.esc="
+                                                        cancelEditingDescription
+                                                    "
+                                                    @blur="
+                                                        saveDescription(
+                                                            transaction,
+                                                        )
+                                                    "
+                                                />
+                                                <button
+                                                    v-else
+                                                    type="button"
+                                                    class="block w-full truncate text-left hover:underline"
+                                                    title="Modifica descrizione"
+                                                    @click="
+                                                        startEditingDescription(
+                                                            transaction,
+                                                        )
+                                                    "
+                                                >
+                                                    {{ transaction.description }}
+                                                </button>
+                                            </TableCell>
+                                            <TableCell>
+                                                <select
+                                                    :value="
+                                                        transaction.transaction_category_id ??
+                                                        ''
+                                                    "
+                                                    class="h-8 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                                    @change="
+                                                        updateCategory(
+                                                            transaction,
+                                                            (
+                                                                $event.target as HTMLSelectElement
+                                                            ).value,
+                                                        )
+                                                    "
+                                                >
+                                                    <option value="">
+                                                        Non categorizzato
+                                                    </option>
+                                                    <option
+                                                        v-for="category in categories"
+                                                        :key="category.id"
+                                                        :value="category.id"
+                                                    >
+                                                        {{ category.name }}
+                                                    </option>
+                                                </select>
+                                            </TableCell>
+                                            <TableCell
+                                                class="text-right font-medium"
+                                                :class="
+                                                    transaction.direction ===
+                                                    'expense'
+                                                        ? 'text-red-600'
+                                                        : 'text-green-600'
+                                                "
+                                            >
+                                                {{
+                                                    formatCurrency(
+                                                        signedAmount(
+                                                            transaction,
+                                                        ),
+                                                    )
+                                                }}
+                                            </TableCell>
+                                            <TableCell class="text-right">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon-sm"
+                                                    class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                                    title="Elimina transazione"
+                                                    @click="
+                                                        destroyTransaction(
+                                                            transaction,
+                                                        )
+                                                    "
+                                                >
+                                                    <Trash2 />
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    </TableBody>
+                                </Table>
+                            </div>
+
+                            <div class="space-y-2 md:hidden">
+                                <div
                                     v-for="transaction in filteredTransactions"
                                     :key="transaction.id"
+                                    class="rounded-lg border p-3"
                                 >
-                                    <TableCell>{{
-                                        formatDate(transaction.transaction_date)
-                                    }}</TableCell>
-                                    <TableCell class="max-w-64">
-                                        <input
-                                            v-if="editingId === transaction.id"
-                                            v-model="editingDescription"
-                                            type="text"
-                                            autofocus
-                                            class="h-8 w-full rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                                            @keyup.enter="
-                                                saveDescription(transaction)
-                                            "
-                                            @keyup.esc="
-                                                cancelEditingDescription
-                                            "
-                                            @blur="saveDescription(transaction)"
-                                        />
-                                        <button
-                                            v-else
-                                            type="button"
-                                            class="block w-full truncate text-left hover:underline"
-                                            title="Modifica descrizione"
-                                            @click="
-                                                startEditingDescription(
-                                                    transaction,
-                                                )
-                                            "
-                                        >
-                                            {{ transaction.description }}
-                                        </button>
-                                    </TableCell>
-                                    <TableCell>
-                                        <select
-                                            :value="
-                                                transaction.transaction_category_id ??
-                                                ''
-                                            "
-                                            class="h-8 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                                            @change="
-                                                updateCategory(
-                                                    transaction,
-                                                    (
-                                                        $event.target as HTMLSelectElement
-                                                    ).value,
-                                                )
-                                            "
-                                        >
-                                            <option value="">
-                                                Non categorizzato
-                                            </option>
-                                            <option
-                                                v-for="category in categories"
-                                                :key="category.id"
-                                                :value="category.id"
+                                    <div
+                                        class="flex items-start justify-between gap-2"
+                                    >
+                                        <div class="min-w-0 flex-1">
+                                            <input
+                                                v-if="
+                                                    editingId === transaction.id
+                                                "
+                                                v-model="editingDescription"
+                                                type="text"
+                                                autofocus
+                                                class="h-8 w-full rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                                @keyup.enter="
+                                                    saveDescription(transaction)
+                                                "
+                                                @keyup.esc="
+                                                    cancelEditingDescription
+                                                "
+                                                @blur="
+                                                    saveDescription(transaction)
+                                                "
+                                            />
+                                            <button
+                                                v-else
+                                                type="button"
+                                                class="block w-full truncate text-left text-sm font-medium hover:underline"
+                                                title="Modifica descrizione"
+                                                @click="
+                                                    startEditingDescription(
+                                                        transaction,
+                                                    )
+                                                "
                                             >
-                                                {{ category.name }}
-                                            </option>
-                                        </select>
-                                    </TableCell>
-                                    <TableCell
-                                        class="text-right font-medium"
-                                        :class="
-                                            transaction.direction === 'expense'
-                                                ? 'text-red-600'
-                                                : 'text-green-600'
+                                                {{ transaction.description }}
+                                            </button>
+                                            <p
+                                                class="mt-0.5 text-xs text-muted-foreground"
+                                            >
+                                                {{
+                                                    formatDate(
+                                                        transaction.transaction_date,
+                                                    )
+                                                }}
+                                            </p>
+                                        </div>
+
+                                        <div
+                                            class="flex shrink-0 items-center gap-0.5"
+                                        >
+                                            <span
+                                                class="text-sm font-medium"
+                                                :class="
+                                                    transaction.direction ===
+                                                    'expense'
+                                                        ? 'text-red-600'
+                                                        : 'text-green-600'
+                                                "
+                                            >
+                                                {{
+                                                    formatCurrency(
+                                                        signedAmount(
+                                                            transaction,
+                                                        ),
+                                                    )
+                                                }}
+                                            </span>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon-sm"
+                                                class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                                title="Elimina transazione"
+                                                @click="
+                                                    destroyTransaction(
+                                                        transaction,
+                                                    )
+                                                "
+                                            >
+                                                <Trash2 />
+                                            </Button>
+                                        </div>
+                                    </div>
+
+                                    <select
+                                        :value="
+                                            transaction.transaction_category_id ??
+                                            ''
+                                        "
+                                        class="mt-2 h-8 w-full rounded-md border border-input bg-transparent px-2 text-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                        @change="
+                                            updateCategory(
+                                                transaction,
+                                                (
+                                                    $event.target as HTMLSelectElement
+                                                ).value,
+                                            )
                                         "
                                     >
-                                        {{
-                                            formatCurrency(
-                                                Number(transaction.amount) *
-                                                    (transaction.direction ===
-                                                    'expense'
-                                                        ? -1
-                                                        : 1),
-                                            )
-                                        }}
-                                    </TableCell>
-                                    <TableCell class="text-right">
-                                        <Button
-                                            variant="ghost"
-                                            size="icon-sm"
-                                            class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                                            title="Elimina transazione"
-                                            @click="
-                                                destroyTransaction(transaction)
-                                            "
+                                        <option value="">
+                                            Non categorizzato
+                                        </option>
+                                        <option
+                                            v-for="category in categories"
+                                            :key="category.id"
+                                            :value="category.id"
                                         >
-                                            <Trash2 />
-                                        </Button>
-                                    </TableCell>
-                                </TableRow>
-                            </TableBody>
-                        </Table>
+                                            {{ category.name }}
+                                        </option>
+                                    </select>
+                                </div>
+                            </div>
+                        </template>
 
                         <Form
                             v-bind="
@@ -425,7 +565,7 @@ function destroyAllTransactions() {
                             class="flex flex-wrap items-end gap-4 rounded-lg border p-4"
                             v-slot="{ errors, processing }"
                         >
-                            <div class="grid gap-2">
+                            <div class="grid min-w-0 gap-2">
                                 <label for="file" class="text-sm font-medium">
                                     Importa estratto conto (CSV o PDF Trade
                                     Republic)
@@ -436,7 +576,7 @@ function destroyAllTransactions() {
                                     type="file"
                                     accept=".csv,.txt,.pdf"
                                     required
-                                    class="h-9 w-full max-w-sm rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none file:mr-3 file:h-full file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                    class="h-9 w-full min-w-0 max-w-sm rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none file:mr-3 file:h-full file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                                 />
                                 <InputError :message="errors.file" />
                             </div>

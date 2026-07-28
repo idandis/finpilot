@@ -10,6 +10,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 require __DIR__.'/settings.php';
+require __DIR__.'/ai-chat.php';
 require __DIR__.'/finance.php';
 require __DIR__.'/passwords.php';
 require __DIR__.'/tasks.php';

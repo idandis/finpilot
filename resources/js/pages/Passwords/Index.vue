@@ -130,53 +130,56 @@ async function copyUsername(entry: PasswordEntry) {
     <div class="mx-auto flex w-full max-w-[64rem] flex-col space-y-6 p-4">
         <Heading title="Password" description="Le password sono cifrate nel database e mostrate solo quando le richiedi esplicitamente." />
 
-        <div class="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
-            <div class="space-y-4">
-                <Form
-                    v-bind="PasswordGroupController.store.form()"
-                    reset-on-success
-                    class="space-y-2 rounded-lg border p-4"
-                    v-slot="{ errors, processing }"
+        <div class="space-y-6">
+            <Form
+                v-bind="PasswordGroupController.store.form()"
+                reset-on-success
+                class="flex w-full items-center gap-2"
+                v-slot="{ errors, processing }"
+            >
+                <Input name="name" placeholder="Nuova categoria" aria-label="Nuova categoria" class="h-10 flex-1" required />
+                <Button type="submit" :disabled="processing" class="shrink-0">
+                    <Plus />
+                    Aggiungi categoria
+                </Button>
+                <InputError :message="errors.name" />
+            </Form>
+
+            <div class="flex flex-wrap items-center gap-2 border-b pb-4">
+                <div
+                    v-for="group in groups"
+                    :key="group.id"
+                    class="group flex shrink-0 items-center gap-1 rounded-lg py-1.5 pr-1.5 pl-4 text-sm transition"
+                    :class="group.id === selectedGroupId ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:bg-muted'"
                 >
-                    <Label for="name">Nuovo gruppo</Label>
-                    <div class="flex gap-2">
-                        <Input id="name" name="name" placeholder="Es. Lavoro" required />
-                        <Button type="submit" :disabled="processing" class="shrink-0">Aggiungi</Button>
-                    </div>
-                    <InputError :message="errors.name" />
-                </Form>
-
-                <div v-if="groups.length === 0" class="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-                    Nessun gruppo ancora: creane uno per iniziare.
-                </div>
-
-                <div v-else class="space-y-1">
-                    <div
-                        v-for="group in groups"
-                        :key="group.id"
-                        class="group flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm"
-                        :class="group.id === selectedGroupId ? 'bg-muted font-medium' : 'hover:bg-muted/50'"
+                    <button type="button" class="flex items-center gap-1.5" @click="selectGroup(group)">
+                        {{ group.name }}
+                        <span class="text-xs opacity-70">({{ group.entries.length }})</span>
+                    </button>
+                    <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        class="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100"
+                        :class="
+                            group.id === selectedGroupId
+                                ? 'text-primary-foreground hover:bg-primary-foreground/20 hover:text-primary-foreground'
+                                : 'hover:bg-destructive/10 hover:text-destructive'
+                        "
+                        title="Elimina gruppo"
+                        @click="destroyGroup(group)"
                     >
-                        <button type="button" class="min-w-0 flex-1 truncate text-left" @click="selectGroup(group)">
-                            {{ group.name }}
-                            <span class="text-xs text-muted-foreground">({{ group.entries.length }})</span>
-                        </button>
-                        <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            class="shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
-                            title="Elimina gruppo"
-                            @click="destroyGroup(group)"
-                        >
-                            <Trash2 />
-                        </Button>
-                    </div>
+                        <Trash2 class="h-3 w-3" />
+                    </Button>
                 </div>
             </div>
 
-            <div class="min-w-0 space-y-4">
+            <div v-if="groups.length === 0" class="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                Nessun gruppo ancora: creane uno qui sopra per iniziare.
+            </div>
+
+            <div v-else class="min-w-0 space-y-4">
                 <div v-if="!selectedGroup" class="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-                    Seleziona un gruppo a sinistra (o creane uno nuovo) per vedere i suoi account.
+                    Seleziona una categoria qui sopra per vedere i suoi account.
                 </div>
 
                 <template v-else>
@@ -225,16 +228,23 @@ async function copyUsername(entry: PasswordEntry) {
                         Nessun account in questo gruppo ancora.
                     </div>
 
-                    <div v-else class="divide-y rounded-lg border">
-                        <div
-                            v-for="entry in selectedGroup.entries"
-                            :key="entry.id"
-                            class="grid grid-cols-1 items-center gap-3 p-4 sm:grid-cols-[1fr_1fr_1fr_auto]"
-                        >
-                            <p class="min-w-0 truncate font-medium">{{ entry.platform_name }}</p>
+                    <div v-else class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div v-for="entry in selectedGroup.entries" :key="entry.id" class="space-y-1.5 rounded-xl bg-muted p-3">
+                            <div class="flex items-center justify-between gap-2">
+                                <p class="min-w-0 truncate font-medium">{{ entry.platform_name }}</p>
+                                <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    class="shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                    title="Elimina account"
+                                    @click="destroyEntry(entry)"
+                                >
+                                    <Trash2 />
+                                </Button>
+                            </div>
 
                             <div class="flex min-w-0 items-center gap-1.5">
-                                <p class="min-w-0 truncate text-sm text-muted-foreground">{{ entry.username ?? '—' }}</p>
+                                <p class="min-w-0 flex-1 truncate text-sm text-muted-foreground">{{ entry.username ?? '—' }}</p>
                                 <Button
                                     v-if="entry.username"
                                     variant="ghost"
@@ -248,7 +258,7 @@ async function copyUsername(entry: PasswordEntry) {
                             </div>
 
                             <div class="flex min-w-0 items-center gap-1.5">
-                                <p class="min-w-0 truncate font-mono text-sm">
+                                <p class="min-w-0 flex-1 truncate font-mono text-sm">
                                     {{ visibleEntryIds.has(entry.id) ? revealedPasswords[entry.id] : '••••••••' }}
                                 </p>
                                 <Button
@@ -272,16 +282,6 @@ async function copyUsername(entry: PasswordEntry) {
                                     <Copy />
                                 </Button>
                             </div>
-
-                            <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                class="shrink-0 justify-self-end text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                                title="Elimina account"
-                                @click="destroyEntry(entry)"
-                            >
-                                <Trash2 />
-                            </Button>
                         </div>
                     </div>
                 </template>

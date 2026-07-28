@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('investments', [InvestmentController::class, 'index'])->name('investments.index');
     Route::post('investments/refresh', [InvestmentController::class, 'refresh'])->name('investments.refresh');
+    Route::post('investments/refresh-realtime', [InvestmentController::class, 'refreshRealtime'])->name('investments.refresh-realtime');
     Route::get('investments/positions/{isin}', [InvestmentPositionController::class, 'show'])->name('investments.positions.show');
     Route::post('investments/positions/{isin}/notes', [InvestmentNoteController::class, 'store'])->name('investments.notes.store');
     Route::delete('investments/notes/{note}', [InvestmentNoteController::class, 'destroy'])->name('investments.notes.destroy');

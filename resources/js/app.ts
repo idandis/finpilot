@@ -35,3 +35,9 @@ initializeFont();
 
 // This will listen for flash toast data from the server...
 initializeFlashToast();
+
+// Register the PWA service worker so the app can be installed on mobile -
+// production only, so it never intercepts requests during `npm run dev`.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js');
+}

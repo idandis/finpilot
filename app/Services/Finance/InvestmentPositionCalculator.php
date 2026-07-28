@@ -94,8 +94,20 @@ class InvestmentPositionCalculator
 
             if ($quantity > self::EPSILON) {
                 $marketPrice = $this->priceRepository->getCachedPrice($isin);
-                $rawPrice = $marketPrice?->last_price !== null ? (float) $marketPrice->last_price : null;
-                $currentPrice = $this->convertToEur($marketPrice?->last_price, $marketPrice?->currency);
+
+                // Prefer whichever of the two cached quotes is actually the
+                // most recent data point - not "always realtime when
+                // present", since a realtime quote that stopped being
+                // polled (e.g. after this instrument became crypto-only, or
+                // the feature being disabled) must not permanently shadow
+                // an EOD close that keeps updating daily.
+                $useRealtime = $marketPrice?->realtime_price !== null
+                    && $marketPrice->realtime_fetched_at !== null
+                    && ($marketPrice->fetched_at === null || $marketPrice->realtime_fetched_at->greaterThanOrEqualTo($marketPrice->fetched_at));
+
+                $rawPriceString = $useRealtime ? $marketPrice->realtime_price : $marketPrice?->last_price;
+                $rawPrice = $rawPriceString !== null ? (float) $rawPriceString : null;
+                $currentPrice = $this->convertToEur($rawPriceString, $marketPrice?->currency);
 
                 $marketValue = $currentPrice !== null ? round($currentPrice * $quantity, 2) : null;
                 $marketValueOriginal = $rawPrice !== null ? round($rawPrice * $quantity, 2) : null;
@@ -120,6 +132,8 @@ class InvestmentPositionCalculator
                     'price_currency' => $marketPrice?->currency,
                     'current_price_original' => $rawPrice,
                     'market_value_original' => $marketValueOriginal,
+                    'price_is_realtime' => $useRealtime,
+                    'realtime_price_at' => $useRealtime ? $marketPrice->realtime_fetched_at->toIso8601String() : null,
                     'realized_gain' => round($realizedGain, 2),
                 ];
             } elseif ($totalInvested > 0) {

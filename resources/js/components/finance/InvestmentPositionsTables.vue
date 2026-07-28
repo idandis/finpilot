@@ -48,6 +48,10 @@ function formatDate(value: string) {
     return new Date(value).toLocaleDateString('it-IT');
 }
 
+function formatTime(value: string) {
+    return new Date(value).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+}
+
 function formatCurrencyOrDash(value: number | null) {
     return value === null ? '—' : formatCurrency(value);
 }
@@ -173,6 +177,14 @@ const totalOpenRealizedGain = computed(() =>
                                 <p class="text-xs text-muted-foreground">Prezzo attuale</p>
                                 <p>{{ formatCurrencyOrDash(position.current_price) }}</p>
                                 <p
+                                    v-if="position.current_price !== null && position.price_is_realtime && position.realtime_price_at"
+                                    class="flex items-center gap-1 text-xs text-muted-foreground"
+                                    title="Quotazione intraday EODHD, tipicamente con 15-20 minuti di ritardo rispetto al mercato"
+                                >
+                                    <span class="size-1.5 rounded-full bg-green-600"></span>
+                                    {{ formatTime(position.realtime_price_at) }}
+                                </p>
+                                <p
                                     v-if="
                                         position.price_currency &&
                                         position.price_currency !== 'EUR' &&
@@ -217,6 +229,14 @@ const totalOpenRealizedGain = computed(() =>
                             <div>
                                 <p class="text-xs text-muted-foreground">Prezzo attuale</p>
                                 <p>{{ formatCurrencyOrDash(position.current_price) }}</p>
+                                <p
+                                    v-if="position.current_price !== null && position.price_is_realtime && position.realtime_price_at"
+                                    class="flex items-center gap-1 text-xs text-muted-foreground"
+                                    title="Quotazione intraday EODHD, tipicamente con 15-20 minuti di ritardo rispetto al mercato"
+                                >
+                                    <span class="size-1.5 rounded-full bg-green-600"></span>
+                                    {{ formatTime(position.realtime_price_at) }}
+                                </p>
                                 <p
                                     v-if="
                                         position.price_currency &&
@@ -390,7 +410,15 @@ const totalOpenRealizedGain = computed(() =>
                                 formatCurrencyOrDash(position.current_price)
                             }}</span>
                             <span
-                                v-if="position.current_price !== null && position.price_date"
+                                v-if="position.current_price !== null && position.price_is_realtime && position.realtime_price_at"
+                                class="flex items-center justify-end gap-1 text-xs text-muted-foreground"
+                                title="Quotazione intraday EODHD, tipicamente con 15-20 minuti di ritardo rispetto al mercato"
+                            >
+                                <span class="size-1.5 rounded-full bg-green-600"></span>
+                                {{ formatTime(position.realtime_price_at) }}
+                            </span>
+                            <span
+                                v-else-if="position.current_price !== null && position.price_date"
                                 class="block text-xs text-muted-foreground"
                             >
                                 al {{ formatDate(position.price_date) }}

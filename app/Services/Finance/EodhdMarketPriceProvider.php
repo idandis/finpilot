@@ -6,6 +6,7 @@ use App\Contracts\FetchedNewsArticle;
 use App\Contracts\FetchedPrice;
 use App\Contracts\MarketPriceProvider;
 use App\Contracts\ResolvedSymbol;
+use App\Exceptions\Finance\MarketPriceProviderUnavailableException;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
@@ -36,7 +37,7 @@ class EodhdMarketPriceProvider implements MarketPriceProvider
     public function resolveSymbol(string $isin): ?ResolvedSymbol
     {
         if (! $this->apiKey || $this->budget->remaining() < 1) {
-            return null;
+            throw new MarketPriceProviderUnavailableException;
         }
 
         $response = Http::get(self::BASE_URL."/search/{$isin}", [
@@ -97,6 +98,39 @@ class EodhdMarketPriceProvider implements MarketPriceProvider
         return new FetchedPrice(
             price: (float) $latest['close'],
             date: Carbon::parse($latest['date']),
+        );
+    }
+
+    public function fetchRealtimePrice(string $code, string $exchange): ?FetchedPrice
+    {
+        if (! $this->apiKey || $this->budget->remaining() < 1) {
+            return null;
+        }
+
+        $response = Http::get(self::BASE_URL."/real-time/{$code}.{$exchange}", [
+            'api_token' => $this->apiKey,
+            'fmt' => 'json',
+        ]);
+        $this->budget->increment();
+
+        if ($response->failed() || empty($response->json())) {
+            return null;
+        }
+
+        $quote = $response->json();
+
+        // EODHD returns the string "NA" (not a missing key, and not simply
+        // a failed response) for every numeric field when this symbol has
+        // no real-time coverage - isset() alone doesn't catch it, and
+        // casting "NA" to float/int would silently produce a bogus 0/epoch
+        // quote instead of the null this should be.
+        if (! isset($quote['close'], $quote['timestamp']) || ! is_numeric($quote['close']) || ! is_numeric($quote['timestamp'])) {
+            return null;
+        }
+
+        return new FetchedPrice(
+            price: (float) $quote['close'],
+            date: Carbon::createFromTimestamp((int) $quote['timestamp']),
         );
     }
 
