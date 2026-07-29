@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import { Form, Head, router } from '@inertiajs/vue3';
-import { ChevronLeft, ChevronRight, GripVertical, Plus, Trash2 } from '@lucide/vue';
+import {
+    ChevronLeft,
+    ChevronRight,
+    ChevronsRight,
+    GripVertical,
+    Plus,
+    Trash2,
+} from '@lucide/vue';
 import { computed, reactive, ref, watch } from 'vue';
 import TaskController from '@/actions/App/Http/Controllers/TaskController';
 import InputError from '@/components/InputError.vue';
@@ -113,13 +120,38 @@ function onDrop(status: TaskStatus, event: DragEvent) {
     router.patch(taskRoutes.move(taskId).url, { status }, { preserveScroll: true, preserveState: true });
 }
 
-function destroyTask(task: Task) {
+function destroyTask(task: Task, event: Event) {
+    event.stopPropagation();
+
     if (!isPast.value && confirm(`Eliminare il task "${task.title}"?`)) {
         router.delete(taskRoutes.destroy(task.id).url, { preserveScroll: true });
     }
 }
 
+// Carries an unfinished (or any) task one day forward - the only action
+// allowed even on an otherwise read-only past day, so leftovers from
+// yesterday can be caught up into today without rewriting history.
+function rescheduleTask(task: Task, event: Event) {
+    event.stopPropagation();
+    router.patch(taskRoutes.reschedule(task.id).url, {}, { preserveScroll: true });
+}
+
 const isAddTaskOpen = ref(false);
+
+const editingTask = ref<Task | null>(null);
+const isEditTaskOpen = computed(() => editingTask.value !== null);
+
+function openEditTaskDialog(task: Task) {
+    if (isPast.value) {
+        return;
+    }
+
+    editingTask.value = task;
+}
+
+function closeEditTaskDialog() {
+    editingTask.value = null;
+}
 </script>
 
 <template>
@@ -180,6 +212,54 @@ const isAddTaskOpen = ref(false);
             </DialogContent>
         </Dialog>
 
+        <Dialog
+            :open="isEditTaskOpen"
+            @update:open="
+                (open) => {
+                    if (!open) closeEditTaskDialog();
+                }
+            "
+        >
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Modifica task</DialogTitle>
+                </DialogHeader>
+                <Form
+                    v-if="editingTask"
+                    :key="`task-${editingTask.id}`"
+                    v-bind="TaskController.update.form(editingTask.id)"
+                    class="grid grid-cols-1 gap-4"
+                    v-slot="{ errors, processing }"
+                    @success="closeEditTaskDialog"
+                >
+                    <div class="grid gap-2">
+                        <Label for="edit-title">Titolo</Label>
+                        <Input
+                            id="edit-title"
+                            name="title"
+                            required
+                            autofocus
+                            :default-value="editingTask.title"
+                        />
+                        <InputError :message="errors.title" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="edit-description">Descrizione (opzionale)</Label>
+                        <textarea
+                            id="edit-description"
+                            name="description"
+                            rows="3"
+                            placeholder="Dettagli aggiuntivi..."
+                            class="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive w-full min-w-0 resize-y rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] md:text-sm"
+                            :value="editingTask.description ?? ''"
+                        ></textarea>
+                        <InputError :message="errors.description" />
+                    </div>
+                    <Button type="submit" :disabled="processing">Salva modifiche</Button>
+                </Form>
+            </DialogContent>
+        </Dialog>
+
         <div class="grid grid-cols-1 gap-4 md:grid-cols-3 md:flex-1 md:min-h-0">
             <div
                 v-for="column in columns"
@@ -204,9 +284,13 @@ const isAddTaskOpen = ref(false);
                     :key="task.id"
                     :draggable="isToday"
                     class="group flex items-start gap-2 rounded-md border bg-background p-3 shadow-sm"
-                    :class="draggingTaskId === task.id ? 'opacity-40' : ''"
+                    :class="[
+                        draggingTaskId === task.id ? 'opacity-40' : '',
+                        isPast ? '' : 'cursor-pointer',
+                    ]"
                     @dragstart="onDragStart(task, $event)"
                     @dragend="onDragEnd"
+                    @click="openEditTaskDialog(task)"
                 >
                     <GripVertical v-if="isToday" class="mt-0.5 size-4 shrink-0 cursor-grab text-muted-foreground" />
                     <div class="min-w-0 flex-1">
@@ -215,16 +299,27 @@ const isAddTaskOpen = ref(false);
                             {{ task.description }}
                         </p>
                     </div>
-                    <Button
-                        v-if="isToday"
-                        variant="ghost"
-                        size="icon-sm"
-                        class="shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
-                        title="Elimina task"
-                        @click="destroyTask(task)"
-                    >
-                        <Trash2 />
-                    </Button>
+                    <div class="flex shrink-0 gap-0.5 opacity-0 group-hover:opacity-100">
+                        <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            class="text-muted-foreground hover:bg-muted"
+                            title="Sposta al giorno successivo"
+                            @click="rescheduleTask(task, $event)"
+                        >
+                            <ChevronsRight />
+                        </Button>
+                        <Button
+                            v-if="isToday"
+                            variant="ghost"
+                            size="icon-sm"
+                            class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            title="Elimina task"
+                            @click="destroyTask(task, $event)"
+                        >
+                            <Trash2 />
+                        </Button>
+                    </div>
                 </div>
             </div>
         </div>

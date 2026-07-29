@@ -2,9 +2,12 @@
 
 namespace Tests\Feature\AiChat;
 
+use App\Models\CategoryBudget;
 use App\Models\Dish;
 use App\Models\Exercise;
 use App\Models\Meal;
+use App\Models\Task;
+use App\Models\TransactionCategory;
 use App\Models\User;
 use App\Models\Workout;
 use App\Services\Ai\AiToolExecutor;
@@ -371,5 +374,196 @@ class AiToolExecutorTest extends TestCase
         $this->assertCount(1, $result['allenamenti']);
         $this->assertSame('Push-up', $result['allenamenti'][0]['esercizi'][0]['nome']);
         $this->assertSame(1, $result['allenamenti'][0]['esercizi'][0]['serie_completate']);
+    }
+
+    public function test_crea_task_creates_tasks_in_the_todo_column()
+    {
+        $user = User::factory()->create();
+        $executor = app(AiToolExecutor::class);
+
+        $result = $executor->execute('crea_task', [
+            'task' => [
+                ['titolo' => 'Chiamare il commercialista', 'data' => now()->addDay()->toDateString()],
+            ],
+        ], $user);
+
+        $this->assertSame(1, $result['inseriti']);
+        $this->assertCount(0, $result['errori']);
+        $this->assertDatabaseHas('tasks', [
+            'user_id' => $user->id,
+            'title' => 'Chiamare il commercialista',
+            'status' => 'todo',
+        ]);
+    }
+
+    public function test_crea_task_rejects_a_past_date()
+    {
+        $user = User::factory()->create();
+        $executor = app(AiToolExecutor::class);
+
+        $result = $executor->execute('crea_task', [
+            'task' => [
+                ['titolo' => 'Task nel passato', 'data' => now()->subDay()->toDateString()],
+            ],
+        ], $user);
+
+        $this->assertSame(0, $result['inseriti']);
+        $this->assertCount(1, $result['errori']);
+        $this->assertDatabaseMissing('tasks', ['title' => 'Task nel passato']);
+    }
+
+    public function test_crea_task_skips_a_duplicate_already_on_file()
+    {
+        $user = User::factory()->create();
+        Task::factory()->create(['user_id' => $user->id, 'title' => 'Palestra', 'task_date' => now()->toDateString()]);
+        $executor = app(AiToolExecutor::class);
+
+        $result = $executor->execute('crea_task', ['task' => [['titolo' => 'Palestra']]], $user);
+
+        $this->assertSame(0, $result['inseriti']);
+        $this->assertCount(1, $result['errori']);
+        $this->assertDatabaseCount('tasks', 1);
+    }
+
+    public function test_elimina_task_deletes_by_id_scoped_to_the_user()
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => $user->id, 'task_date' => now()->toDateString()]);
+        $othersTask = Task::factory()->create(['task_date' => now()->toDateString()]);
+        $executor = app(AiToolExecutor::class);
+
+        $result = $executor->execute('elimina_task', ['id_task' => [$task->id, $othersTask->id]], $user);
+
+        $this->assertSame(1, $result['eliminati']);
+        $this->assertCount(1, $result['errori']);
+        $this->assertDatabaseMissing('tasks', ['id' => $task->id]);
+        $this->assertDatabaseHas('tasks', ['id' => $othersTask->id]);
+    }
+
+    public function test_elimina_task_refuses_a_task_from_a_past_day()
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => $user->id, 'task_date' => now()->subDay()->toDateString()]);
+        $executor = app(AiToolExecutor::class);
+
+        $result = $executor->execute('elimina_task', ['id_task' => [$task->id]], $user);
+
+        $this->assertSame(0, $result['eliminati']);
+        $this->assertCount(1, $result['errori']);
+        $this->assertDatabaseHas('tasks', ['id' => $task->id]);
+    }
+
+    public function test_imposta_budget_categoria_creates_a_monthly_budget()
+    {
+        $user = User::factory()->create();
+        TransactionCategory::factory()->create(['user_id' => null, 'name' => 'Alimentari']);
+        $executor = app(AiToolExecutor::class);
+
+        $result = $executor->execute('imposta_budget_categoria', [
+            'categoria' => 'alimentari',
+            'importo_mensile' => 350,
+        ], $user);
+
+        $this->assertSame('Alimentari', $result['categoria']);
+        $this->assertDatabaseHas('category_budgets', ['user_id' => $user->id, 'monthly_amount' => 350]);
+    }
+
+    public function test_imposta_budget_categoria_reports_an_unknown_category()
+    {
+        $user = User::factory()->create();
+        $executor = app(AiToolExecutor::class);
+
+        $result = $executor->execute('imposta_budget_categoria', [
+            'categoria' => 'Non esiste',
+            'importo_mensile' => 100,
+        ], $user);
+
+        $this->assertArrayHasKey('errore', $result);
+        $this->assertDatabaseCount('category_budgets', 0);
+    }
+
+    public function test_elimina_budget_categoria_removes_an_existing_budget()
+    {
+        $user = User::factory()->create();
+        $category = TransactionCategory::factory()->create(['user_id' => null, 'name' => 'Trasporti']);
+        CategoryBudget::factory()->create([
+            'user_id' => $user->id,
+            'transaction_category_id' => $category->id,
+            'monthly_amount' => 80,
+        ]);
+        $executor = app(AiToolExecutor::class);
+
+        $result = $executor->execute('elimina_budget_categoria', ['categoria' => 'Trasporti'], $user);
+
+        $this->assertTrue($result['rimosso']);
+        $this->assertDatabaseMissing('category_budgets', ['user_id' => $user->id, 'transaction_category_id' => $category->id]);
+    }
+
+    public function test_elimina_budget_categoria_reports_when_nothing_was_set()
+    {
+        $user = User::factory()->create();
+        TransactionCategory::factory()->create(['user_id' => null, 'name' => 'Viaggi']);
+        $executor = app(AiToolExecutor::class);
+
+        $result = $executor->execute('elimina_budget_categoria', ['categoria' => 'Viaggi'], $user);
+
+        $this->assertArrayHasKey('errore', $result);
+    }
+
+    public function test_crea_ricordo_saves_a_memory_with_optional_details()
+    {
+        $user = User::factory()->create();
+        $executor = app(AiToolExecutor::class);
+
+        $result = $executor->execute('crea_ricordo', [
+            'ricordi' => [
+                [
+                    'data' => '2026-07-29',
+                    'titolo' => 'Cena con amici',
+                    'descrizione' => 'Bella serata al ristorante nuovo in centro.',
+                    'luogo' => 'Milano',
+                    'umore' => 'ottimo',
+                ],
+            ],
+        ], $user);
+
+        $this->assertSame(1, $result['inseriti']);
+        $this->assertCount(0, $result['errori']);
+        $this->assertDatabaseHas('memories', [
+            'user_id' => $user->id,
+            'memory_date' => '2026-07-29 00:00:00',
+            'title' => 'Cena con amici',
+            'location' => 'Milano',
+            'mood' => 'ottimo',
+        ]);
+    }
+
+    public function test_crea_ricordo_defaults_to_today_and_ignores_an_invalid_mood()
+    {
+        $user = User::factory()->create();
+        $executor = app(AiToolExecutor::class);
+
+        $result = $executor->execute('crea_ricordo', [
+            'ricordi' => [['titolo' => 'Giornata tranquilla', 'umore' => 'non_esiste']],
+        ], $user);
+
+        $this->assertSame(1, $result['inseriti']);
+        $this->assertDatabaseHas('memories', [
+            'user_id' => $user->id,
+            'memory_date' => now()->toDateString().' 00:00:00',
+            'title' => 'Giornata tranquilla',
+            'mood' => null,
+        ]);
+    }
+
+    public function test_crea_ricordo_requires_at_least_one_memory()
+    {
+        $user = User::factory()->create();
+        $executor = app(AiToolExecutor::class);
+
+        $result = $executor->execute('crea_ricordo', ['ricordi' => []], $user);
+
+        $this->assertArrayHasKey('errore', $result);
+        $this->assertDatabaseCount('memories', 0);
     }
 }

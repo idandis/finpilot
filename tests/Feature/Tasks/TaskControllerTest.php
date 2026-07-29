@@ -295,4 +295,94 @@ class TaskControllerTest extends TestCase
         $response->assertInertia(fn ($page) => $page->has('tasks', 0));
         $this->assertDatabaseHas('tasks', ['id' => $yesterdaysTask->id, 'status' => 'in_progress']);
     }
+
+    public function test_a_user_can_update_their_own_task()
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => $user->id, 'task_date' => today(), 'title' => 'Vecchio titolo']);
+
+        $response = $this->actingAs($user)->patch(route('tasks.update', $task), [
+            'title' => 'Nuovo titolo',
+            'description' => 'Nuova descrizione',
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('tasks', ['id' => $task->id, 'title' => 'Nuovo titolo', 'description' => 'Nuova descrizione']);
+    }
+
+    public function test_a_user_can_update_a_task_on_a_future_day()
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => $user->id, 'task_date' => today()->addDay(), 'title' => 'Vecchio']);
+
+        $response = $this->actingAs($user)->patch(route('tasks.update', $task), ['title' => 'Nuovo']);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('tasks', ['id' => $task->id, 'title' => 'Nuovo']);
+    }
+
+    public function test_a_user_cannot_update_a_task_from_a_past_day()
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => $user->id, 'task_date' => today()->subDay(), 'title' => 'Vecchio']);
+
+        $response = $this->actingAs($user)->patch(route('tasks.update', $task), ['title' => 'Nuovo']);
+
+        $response->assertForbidden();
+        $this->assertDatabaseHas('tasks', ['id' => $task->id, 'title' => 'Vecchio']);
+    }
+
+    public function test_updating_a_task_requires_a_title()
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => $user->id, 'task_date' => today()]);
+
+        $response = $this->actingAs($user)->patch(route('tasks.update', $task), ['title' => '']);
+
+        $response->assertSessionHasErrors('title');
+    }
+
+    public function test_a_user_cannot_update_another_users_task()
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => User::factory(), 'task_date' => today(), 'title' => 'Non mio']);
+
+        $response = $this->actingAs($user)->patch(route('tasks.update', $task), ['title' => 'Rubato']);
+
+        $response->assertForbidden();
+        $this->assertDatabaseHas('tasks', ['id' => $task->id, 'title' => 'Non mio']);
+    }
+
+    public function test_a_user_can_reschedule_a_task_from_a_past_day_to_the_next_day()
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => $user->id, 'task_date' => today()->subDay(), 'status' => 'todo']);
+
+        $response = $this->actingAs($user)->patch(route('tasks.reschedule', $task));
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('tasks', ['id' => $task->id, 'task_date' => today()->toDateString().' 00:00:00']);
+    }
+
+    public function test_rescheduling_appends_to_the_end_of_the_target_days_column()
+    {
+        $user = User::factory()->create();
+        Task::factory()->create(['user_id' => $user->id, 'task_date' => today(), 'status' => 'todo', 'position' => 0]);
+        $task = Task::factory()->create(['user_id' => $user->id, 'task_date' => today()->subDay(), 'status' => 'todo', 'position' => 0]);
+
+        $this->actingAs($user)->patch(route('tasks.reschedule', $task));
+
+        $this->assertDatabaseHas('tasks', ['id' => $task->id, 'position' => 1]);
+    }
+
+    public function test_a_user_cannot_reschedule_another_users_task()
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => User::factory(), 'task_date' => today()->subDay()]);
+
+        $response = $this->actingAs($user)->patch(route('tasks.reschedule', $task));
+
+        $response->assertForbidden();
+        $this->assertDatabaseHas('tasks', ['id' => $task->id, 'task_date' => today()->subDay()->toDateString().' 00:00:00']);
+    }
 }

@@ -2,6 +2,7 @@ export * from './auth';
 export * from './dishes';
 export * from './exercises';
 export * from './finance';
+export * from './life';
 export * from './meals';
 export * from './navigation';
 export * from './passwords';

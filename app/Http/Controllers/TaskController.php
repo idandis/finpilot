@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\Tasks\TaskMoveRequest;
 use App\Http\Requests\Tasks\TaskStoreRequest;
+use App\Http\Requests\Tasks\TaskUpdateRequest;
 use App\Models\Task;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -79,6 +80,44 @@ class TaskController extends Controller
             'task_date' => $taskDate,
             'position' => $nextPosition,
         ]);
+
+        return back();
+    }
+
+    /**
+     * Editing a task's own content (title/description) - same "past days
+     * are read-only" rule as move()/destroy(), since rewriting what a task
+     * said after its day is over would break the historical record.
+     */
+    public function update(TaskUpdateRequest $request, Task $task): RedirectResponse
+    {
+        abort_unless(! $task->task_date->lt(Carbon::today()), 403, 'Non è possibile modificare i task dei giorni passati.');
+
+        $task->update($request->validated());
+
+        return back();
+    }
+
+    /**
+     * Carries an unfinished task forward one day - the one action allowed
+     * even on an otherwise read-only past day, since it doesn't rewrite
+     * what happened, it just moves the still-open item to where it'll
+     * actually get done. Always appended to the end of its status column on
+     * the new day, same positioning convention as store()/move().
+     */
+    public function rescheduleToNextDay(Request $request, Task $task): RedirectResponse
+    {
+        abort_unless($task->user_id === $request->user()->id, 403);
+
+        $newDate = $task->task_date->copy()->addDay();
+
+        $nextPosition = 1 + (Task::query()
+            ->where('user_id', $task->user_id)
+            ->whereDate('task_date', $newDate)
+            ->where('status', $task->status)
+            ->max('position') ?? -1);
+
+        $task->update(['task_date' => $newDate, 'position' => $nextPosition]);
 
         return back();
     }

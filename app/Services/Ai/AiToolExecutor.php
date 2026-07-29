@@ -4,9 +4,11 @@ namespace App\Services\Ai;
 
 use App\Contracts\MarketPriceProvider;
 use App\Models\Card;
+use App\Models\CategoryBudget;
 use App\Models\Dish;
 use App\Models\Exercise;
 use App\Models\Meal;
+use App\Models\Memory;
 use App\Models\ShoppingList;
 use App\Models\Task;
 use App\Models\Transaction;
@@ -17,6 +19,7 @@ use App\Models\WorkoutExercise;
 use App\Services\Finance\AccountBalanceCalculator;
 use App\Services\Finance\InvestmentPositionCalculator;
 use App\Services\Finance\SpendingSummaryCalculator;
+use App\Services\Life\Moods;
 use App\Services\Meals\DishCategories;
 use App\Services\Shopping\GroceryCategories;
 use App\Services\Workouts\ExerciseCategories;
@@ -32,12 +35,15 @@ use Throwable;
  * same way PasswordGroupController::index() never puts them on a page's
  * props - excluded by omission, not by a check that could be missed.
  *
- * Only four tools write (pianifica_pasti, crea_piatti_preconfigurati,
- * crea_esercizi, pianifica_allenamenti). Writing is deliberately kept to
- * these low-stakes domains for now - meal plan entries, dish-library rows,
- * exercise-library rows and workout entries are easy to review and undo
- * from their respective pages, unlike e.g. a financial transaction or a
- * task the model might get subtly wrong.
+ * Writing tools (pianifica_pasti, crea_piatti_preconfigurati, crea_esercizi,
+ * pianifica_allenamenti, crea_task, elimina_task, imposta_budget_categoria,
+ * elimina_budget_categoria, crea_ricordo) are kept to domains that are easy
+ * to review and undo from their own page (a meal, a dish, an exercise, a
+ * task, a budget target, a memory) - never a financial transaction, which
+ * stays read-only here. Every write tool except crea_ricordo requires an
+ * explicit request in the conversation before it fires (see each tool's
+ * description) - crea_ricordo is the one exception, since recounting a day
+ * in chat is itself the signal to save it as a "ricordo".
  */
 class AiToolExecutor
 {
@@ -224,6 +230,78 @@ class AiToolExecutor
                 ],
                 required: ['allenamenti'],
             ),
+            self::definition(
+                'crea_task',
+                'Crea uno o più task nella board "Task" dell\'utente, in colonna "da fare" (li fa comparire in Tasks/Index). Usalo SOLO quando l\'utente chiede esplicitamente di aggiungere/inserire un task, non per suggerire cosa fare in chat. Non è possibile creare task su un giorno già passato.',
+                [
+                    'task' => [
+                        'type' => 'array',
+                        'description' => 'Elenco dei task da creare.',
+                        'items' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'titolo' => ['type' => 'string', 'description' => 'Titolo del task.'],
+                                'descrizione' => ['type' => 'string', 'description' => 'Dettagli opzionali.'],
+                                'data' => ['type' => 'string', 'description' => 'Data del task, formato YYYY-MM-DD. Se omessa, usa oggi.'],
+                            ],
+                            'required' => ['titolo'],
+                        ],
+                    ],
+                ],
+                required: ['task'],
+            ),
+            self::definition(
+                'elimina_task',
+                'Elimina uno o più task dell\'utente, dato il loro id (usa prima task_utente per ottenere gli id). Non è possibile eliminare task di un giorno già passato. Usalo SOLO quando l\'utente chiede esplicitamente di eliminare un task.',
+                [
+                    'id_task' => [
+                        'type' => 'array',
+                        'description' => 'Elenco degli id dei task da eliminare.',
+                        'items' => ['type' => 'integer'],
+                    ],
+                ],
+                required: ['id_task'],
+            ),
+            self::definition(
+                'imposta_budget_categoria',
+                'Imposta o aggiorna il budget mensile dell\'utente per una categoria di spesa (li fa comparire in finance/Budgets/Index). Usalo SOLO quando l\'utente chiede esplicitamente di impostare/cambiare un budget.',
+                [
+                    'categoria' => ['type' => 'string', 'description' => 'Nome della categoria, es. "Alimentari".'],
+                    'importo_mensile' => ['type' => 'number', 'description' => 'Budget mensile in euro.'],
+                ],
+                required: ['categoria', 'importo_mensile'],
+            ),
+            self::definition(
+                'elimina_budget_categoria',
+                'Rimuove il budget mensile impostato per una categoria di spesa (torna a "nessun budget impostato"). Usalo SOLO quando l\'utente chiede esplicitamente di rimuovere un budget.',
+                [
+                    'categoria' => ['type' => 'string', 'description' => 'Nome della categoria, es. "Alimentari".'],
+                ],
+                required: ['categoria'],
+            ),
+            self::definition(
+                'crea_ricordo',
+                'Salva uno o più ricordi nel diario "Vita" dell\'utente (li fa comparire in Life/Week) - usalo quando l\'utente racconta in chat cosa ha fatto/vissuto in una giornata (oggi o un altro giorno): raccontare la giornata è di per sé il segnale per salvarla, non serve che lo chieda esplicitamente. Se manca un dettaglio opzionale (luogo, persone, umore), omettilo piuttosto che indovinare.',
+                [
+                    'ricordi' => [
+                        'type' => 'array',
+                        'description' => 'Elenco dei ricordi da salvare.',
+                        'items' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'data' => ['type' => 'string', 'description' => 'Data del ricordo, formato YYYY-MM-DD. Se omessa, usa oggi.'],
+                                'titolo' => ['type' => 'string', 'description' => 'Titolo breve del ricordo.'],
+                                'descrizione' => ['type' => 'string', 'description' => 'Racconto/dettagli del ricordo.'],
+                                'luogo' => ['type' => 'string', 'description' => 'Luogo (opzionale).'],
+                                'persone' => ['type' => 'string', 'description' => 'Persone coinvolte (opzionale).'],
+                                'umore' => ['type' => 'string', 'enum' => Moods::keys(), 'description' => 'Umore della giornata (opzionale).'],
+                            ],
+                            'required' => ['titolo'],
+                        ],
+                    ],
+                ],
+                required: ['ricordi'],
+            ),
         ];
     }
 
@@ -274,6 +352,11 @@ class AiToolExecutor
             'crea_piatti_preconfigurati' => $this->creaPiattiPreconfigurati($user, $arguments),
             'crea_esercizi' => $this->creaEsercizi($user, $arguments),
             'pianifica_allenamenti' => $this->pianificaAllenamenti($user, $arguments),
+            'crea_task' => $this->creaTask($user, $arguments),
+            'elimina_task' => $this->eliminaTask($user, $arguments),
+            'imposta_budget_categoria' => $this->impostaBudgetCategoria($user, $arguments),
+            'elimina_budget_categoria' => $this->eliminaBudgetCategoria($user, $arguments),
+            'crea_ricordo' => $this->creaRicordo($user, $arguments),
             default => ['errore' => "Tool sconosciuto: {$tool}"],
         };
     }
@@ -369,6 +452,7 @@ class AiToolExecutor
 
         return [
             'task' => $query->get()->map(fn (Task $task) => [
+                'id' => $task->id,
                 'titolo' => $task->title,
                 'stato' => $task->status,
                 'data' => $task->task_date->format('Y-m-d'),
@@ -845,6 +929,294 @@ class AiToolExecutor
         return [
             'inseriti' => count($created),
             'allenamenti_inseriti' => $created,
+            'errori' => $errors,
+        ];
+    }
+
+    /**
+     * Creates one or more tasks, mirroring TaskController::store()'s own
+     * always-"todo"/append-to-end-of-day positioning exactly. A day already
+     * in the past is rejected up front, the same rule TaskController::store()
+     * itself doesn't need to enforce (its board never lets you pick a past
+     * day to begin with) but a model-supplied date can ask for regardless.
+     *
+     * @param  array<string, mixed>  $arguments
+     * @return array<string, mixed>
+     */
+    private function creaTask(User $user, array $arguments): array
+    {
+        $requested = $arguments['task'] ?? [];
+
+        if (! is_array($requested) || $requested === []) {
+            return ['errore' => 'Nessun task fornito.'];
+        }
+
+        $created = [];
+        $errors = [];
+
+        foreach ($requested as $index => $task) {
+            $title = $task['titolo'] ?? null;
+            $date = $task['data'] ?? null;
+
+            if (! is_string($title) || $title === '') {
+                $errors[] = "Task #{$index}: titolo mancante.";
+
+                continue;
+            }
+
+            if ($date !== null) {
+                try {
+                    $date = Carbon::createFromFormat('Y-m-d', $date)->startOfDay();
+                } catch (Throwable) {
+                    $errors[] = "Task #{$index}: data \"{$date}\" non valida, atteso formato YYYY-MM-DD.";
+
+                    continue;
+                }
+            } else {
+                $date = Carbon::today();
+            }
+
+            if ($date->lt(Carbon::today())) {
+                $errors[] = "Task #{$index}: non è possibile creare task su un giorno già passato.";
+
+                continue;
+            }
+
+            $alreadyExists = $user->tasks()
+                ->whereDate('task_date', $date)
+                ->where('title', $title)
+                ->exists();
+
+            if ($alreadyExists) {
+                $errors[] = "Task #{$index}: \"{$title}\" il {$date->toDateString()} è già presente, non duplicato.";
+
+                continue;
+            }
+
+            $nextPosition = 1 + ($user->tasks()
+                ->whereDate('task_date', $date)
+                ->where('status', 'todo')
+                ->max('position') ?? -1);
+
+            $created[] = $user->tasks()->create([
+                'title' => $title,
+                'description' => is_string($task['descrizione'] ?? null) ? $task['descrizione'] : null,
+                'status' => 'todo',
+                'task_date' => $date,
+                'position' => $nextPosition,
+            ]);
+        }
+
+        return [
+            'inseriti' => count($created),
+            'task_inseriti' => collect($created)->map(fn (Task $task) => [
+                'id' => $task->id,
+                'titolo' => $task->title,
+                'data' => $task->task_date->format('Y-m-d'),
+            ])->all(),
+            'errori' => $errors,
+        ];
+    }
+
+    /**
+     * Deletes one or more tasks by id, scoped to the user (an id belonging
+     * to someone else is reported as "not found", never touched) and
+     * subject to the same past-day-is-read-only rule as
+     * TaskController::destroy().
+     *
+     * @param  array<string, mixed>  $arguments
+     * @return array<string, mixed>
+     */
+    private function eliminaTask(User $user, array $arguments): array
+    {
+        $ids = $arguments['id_task'] ?? [];
+
+        if (! is_array($ids) || $ids === []) {
+            return ['errore' => 'Nessun id_task fornito.'];
+        }
+
+        $deleted = [];
+        $errors = [];
+
+        foreach ($ids as $id) {
+            if (! is_int($id)) {
+                $errors[] = 'id_task non valido: '.json_encode($id);
+
+                continue;
+            }
+
+            $task = Task::query()->where('user_id', $user->id)->find($id);
+
+            if (! $task) {
+                $errors[] = "Task #{$id}: non trovato.";
+
+                continue;
+            }
+
+            if ($task->task_date->lt(Carbon::today())) {
+                $errors[] = "Task #{$id} (\"{$task->title}\"): non è possibile eliminare task di un giorno già passato.";
+
+                continue;
+            }
+
+            $deleted[] = ['id' => $task->id, 'titolo' => $task->title];
+            $task->delete();
+        }
+
+        return [
+            'eliminati' => count($deleted),
+            'task_eliminati' => $deleted,
+            'errori' => $errors,
+        ];
+    }
+
+    /**
+     * Sets/updates the user's monthly budget for a category, mirroring
+     * BudgetController::update()'s updateOrCreate() - resolves the category
+     * by name among system categories and the user's own (same visibility
+     * rule as spesePerCategoria()), case-insensitively since a model won't
+     * necessarily match the stored casing exactly.
+     *
+     * @param  array<string, mixed>  $arguments
+     * @return array<string, mixed>
+     */
+    private function impostaBudgetCategoria(User $user, array $arguments): array
+    {
+        $categoryName = $arguments['categoria'] ?? null;
+        $amount = $arguments['importo_mensile'] ?? null;
+
+        if (! is_string($categoryName) || $categoryName === '') {
+            return ['errore' => 'categoria mancante.'];
+        }
+
+        if (! is_numeric($amount) || (float) $amount < 0) {
+            return ['errore' => 'importo_mensile mancante o non valido.'];
+        }
+
+        $category = $this->findCategoryByName($user, $categoryName);
+
+        if (! $category) {
+            return ['errore' => "Categoria \"{$categoryName}\" non trovata."];
+        }
+
+        CategoryBudget::query()->updateOrCreate(
+            ['user_id' => $user->id, 'transaction_category_id' => $category->id],
+            ['monthly_amount' => $amount],
+        );
+
+        return ['categoria' => $category->name, 'importo_mensile' => (float) $amount];
+    }
+
+    /**
+     * Removes the user's monthly budget for a category, if one is set -
+     * mirrors BudgetController::update()'s null-amount delete path.
+     *
+     * @param  array<string, mixed>  $arguments
+     * @return array<string, mixed>
+     */
+    private function eliminaBudgetCategoria(User $user, array $arguments): array
+    {
+        $categoryName = $arguments['categoria'] ?? null;
+
+        if (! is_string($categoryName) || $categoryName === '') {
+            return ['errore' => 'categoria mancante.'];
+        }
+
+        $category = $this->findCategoryByName($user, $categoryName);
+
+        if (! $category) {
+            return ['errore' => "Categoria \"{$categoryName}\" non trovata."];
+        }
+
+        $deleted = CategoryBudget::query()
+            ->where('user_id', $user->id)
+            ->where('transaction_category_id', $category->id)
+            ->delete();
+
+        if ($deleted === 0) {
+            return ['errore' => "Nessun budget impostato per \"{$category->name}\"."];
+        }
+
+        return ['categoria' => $category->name, 'rimosso' => true];
+    }
+
+    private function findCategoryByName(User $user, string $name): ?TransactionCategory
+    {
+        return TransactionCategory::query()
+            ->where(fn ($query) => $query->whereNull('user_id')->orWhere('user_id', $user->id))
+            ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
+            ->first();
+    }
+
+    /**
+     * Creates one or more "ricordi" (App\Models\Memory), mirroring
+     * MemoryController::store()'s own field set minus the photo upload -
+     * not something the chat tool-calling interface can carry. Unlike every
+     * other write tool here, this one is meant to fire on the strength of
+     * the user simply recounting a day in chat (see its tool definition),
+     * so it deliberately has no explicit-request or duplicate-detection
+     * gate of its own - what to save is judged by the model from context,
+     * not by this method.
+     *
+     * @param  array<string, mixed>  $arguments
+     * @return array<string, mixed>
+     */
+    private function creaRicordo(User $user, array $arguments): array
+    {
+        $requested = $arguments['ricordi'] ?? [];
+
+        if (! is_array($requested) || $requested === []) {
+            return ['errore' => 'Nessun ricordo fornito.'];
+        }
+
+        $created = [];
+        $errors = [];
+
+        foreach ($requested as $index => $memory) {
+            $title = $memory['titolo'] ?? null;
+            $date = $memory['data'] ?? null;
+
+            if (! is_string($title) || $title === '') {
+                $errors[] = "Ricordo #{$index}: titolo mancante.";
+
+                continue;
+            }
+
+            if ($date !== null) {
+                try {
+                    $date = Carbon::createFromFormat('Y-m-d', $date)->toDateString();
+                } catch (Throwable) {
+                    $errors[] = "Ricordo #{$index}: data \"{$date}\" non valida, atteso formato YYYY-MM-DD.";
+
+                    continue;
+                }
+            } else {
+                $date = Carbon::today()->toDateString();
+            }
+
+            $mood = $memory['umore'] ?? null;
+
+            if (! is_string($mood) || ! array_key_exists($mood, Moods::ALL)) {
+                $mood = null;
+            }
+
+            $created[] = $user->memories()->create([
+                'memory_date' => $date,
+                'title' => $title,
+                'description' => is_string($memory['descrizione'] ?? null) ? $memory['descrizione'] : null,
+                'location' => is_string($memory['luogo'] ?? null) ? $memory['luogo'] : null,
+                'people' => is_string($memory['persone'] ?? null) ? $memory['persone'] : null,
+                'mood' => $mood,
+            ]);
+        }
+
+        return [
+            'inseriti' => count($created),
+            'ricordi_inseriti' => collect($created)->map(fn (Memory $memory) => [
+                'id' => $memory->id,
+                'data' => $memory->memory_date->format('Y-m-d'),
+                'titolo' => $memory->title,
+            ])->all(),
             'errori' => $errors,
         ];
     }

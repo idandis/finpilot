@@ -11,6 +11,7 @@ import {
     ShoppingCart,
     Dumbbell,
     Sparkles,
+    Sprout,
     Tag,
     Tags,
     TrendingUp,
@@ -38,6 +39,7 @@ import * as categories from '@/routes/categories';
 import * as categoryRules from '@/routes/category-rules';
 import * as companyAnalyses from '@/routes/company-analyses';
 import * as investments from '@/routes/investments';
+import * as life from '@/routes/life';
 import * as market from '@/routes/market';
 import * as meals from '@/routes/meals';
 import * as passwords from '@/routes/passwords';
@@ -112,6 +114,11 @@ const managementNavItems: NavItem[] = [
         title: 'Allenamenti',
         href: workouts.index(),
         icon: Dumbbell,
+    },
+    {
+        title: 'Vita',
+        href: life.index(),
+        icon: Sprout,
     },
 ];
 
