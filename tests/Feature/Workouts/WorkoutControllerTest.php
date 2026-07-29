@@ -224,4 +224,50 @@ class WorkoutControllerTest extends TestCase
         $response->assertForbidden();
         $this->assertDatabaseHas('workouts', ['id' => $workout->id]);
     }
+
+    public function test_schedule_assigns_a_time_slot()
+    {
+        $user = User::factory()->create();
+        $workout = Workout::factory()->create(['user_id' => $user->id, 'workout_date' => today(), 'scheduled_time' => null]);
+
+        $response = $this->actingAs($user)->patch(route('workouts.schedule', $workout), [
+            'workout_date' => today()->toDateString(),
+            'scheduled_time' => '18:00',
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('workouts', ['id' => $workout->id, 'scheduled_time' => '18:00:00']);
+    }
+
+    public function test_schedule_can_move_a_workout_to_a_different_day()
+    {
+        $user = User::factory()->create();
+        $workout = Workout::factory()->create(['user_id' => $user->id, 'workout_date' => today()]);
+
+        $response = $this->actingAs($user)->patch(route('workouts.schedule', $workout), [
+            'workout_date' => today()->addDay()->toDateString(),
+            'scheduled_time' => '07:30',
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('workouts', [
+            'id' => $workout->id,
+            'workout_date' => today()->addDay()->toDateString().' 00:00:00',
+            'scheduled_time' => '07:30:00',
+        ]);
+    }
+
+    public function test_schedule_is_forbidden_for_another_users_workout()
+    {
+        $user = User::factory()->create();
+        $workout = Workout::factory()->create(['user_id' => User::factory()]);
+
+        $response = $this->actingAs($user)->patch(route('workouts.schedule', $workout), [
+            'workout_date' => today()->toDateString(),
+            'scheduled_time' => '18:00',
+        ]);
+
+        $response->assertForbidden();
+        $this->assertDatabaseHas('workouts', ['id' => $workout->id, 'scheduled_time' => null]);
+    }
 }

@@ -14,14 +14,17 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $user_id
  * @property string $name
+ * @property string|null $icon
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name'])]
+#[Fillable(['name', 'icon'])]
 class PasswordGroup extends Model
 {
     /** @use HasFactory<PasswordGroupFactory> */
     use HasFactory;
+
+    public const ICONS = ['apps', 'banking', 'email', 'notes', 'social', 'shopping', 'work', 'wifi', 'other'];
 
     /**
      * @return BelongsTo<User, $this>

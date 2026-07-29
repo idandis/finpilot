@@ -1,24 +1,28 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
 import {
+    CalendarDays,
     ChartCandlestick,
     ClipboardCheck,
     CreditCard,
+    Dumbbell,
+    HeartPulse,
     KanbanSquare,
     KeyRound,
     LayoutGrid,
+    LineChart,
+    ListChecks,
     PiggyBank,
     ShoppingCart,
-    Dumbbell,
     Sparkles,
     Sprout,
     Tag,
     Tags,
     TrendingUp,
     UtensilsCrossed,
+    Wallet,
 } from '@lucide/vue';
 import AppLogo from '@/components/AppLogo.vue';
-import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
 import {
@@ -34,6 +38,7 @@ import {
 import { dashboard } from '@/routes';
 import * as aiChat from '@/routes/ai-chat';
 import * as budgets from '@/routes/budgets';
+import * as calendar from '@/routes/calendar';
 import * as cards from '@/routes/cards';
 import * as categories from '@/routes/categories';
 import * as categoryRules from '@/routes/category-rules';
@@ -63,75 +68,98 @@ const mainNavItems: NavItem[] = [
         icon: LayoutGrid,
     },
     {
-        title: 'Carte',
-        href: cards.index(),
-        icon: CreditCard,
-    },
-    {
-        title: 'Budget',
-        href: budgets.index(),
-        icon: PiggyBank,
+        title: 'Finanza',
+        icon: Wallet,
+        items: [
+            {
+                title: 'Categorie',
+                href: categories.index(),
+                icon: Tag,
+            },
+            {
+                title: 'Regole categorie',
+                href: categoryRules.index(),
+                icon: Tags,
+            },
+            {
+                title: 'Carte',
+                href: cards.index(),
+                icon: CreditCard,
+            },
+            {
+                title: 'Budget',
+                href: budgets.index(),
+                icon: PiggyBank,
+            },
+        ],
     },
     {
         title: 'Investimenti',
-        href: investments.index(),
-        icon: TrendingUp,
+        icon: LineChart,
+        items: [
+            {
+                title: 'Investimenti personali',
+                href: investments.index(),
+                icon: TrendingUp,
+            },
+            {
+                title: 'Mercato',
+                href: market.index(),
+                icon: ChartCandlestick,
+            },
+            {
+                title: 'Analisi aziendale',
+                href: companyAnalyses.index(),
+                icon: ClipboardCheck,
+            },
+        ],
     },
     {
-        title: 'Mercato',
-        href: market.index(),
-        icon: ChartCandlestick,
-    },
-    {
-        title: 'Analisi aziende',
-        href: companyAnalyses.index(),
-        icon: ClipboardCheck,
-    },
-];
-
-const managementNavItems: NavItem[] = [
-    {
-        title: 'Task',
-        href: tasks.index(),
-        icon: KanbanSquare,
-    },
-    {
-        title: 'Password',
-        href: passwords.index(),
-        icon: KeyRound,
-    },
-    {
-        title: 'Lista della spesa',
-        href: shoppingLists.index(),
-        icon: ShoppingCart,
-    },
-    {
-        title: 'Pasti',
-        href: meals.index(),
-        icon: UtensilsCrossed,
-    },
-    {
-        title: 'Allenamenti',
-        href: workouts.index(),
-        icon: Dumbbell,
+        title: 'Produttività',
+        icon: ListChecks,
+        items: [
+            {
+                title: 'Task',
+                href: tasks.index(),
+                icon: KanbanSquare,
+            },
+            {
+                title: 'Calendario',
+                href: calendar.index(),
+                icon: CalendarDays,
+            },
+            {
+                title: 'Password',
+                href: passwords.index(),
+                icon: KeyRound,
+            },
+        ],
     },
     {
         title: 'Vita',
-        href: life.index(),
-        icon: Sprout,
-    },
-];
-
-const footerNavItems: NavItem[] = [
-    {
-        title: 'Categorie',
-        href: categories.index(),
-        icon: Tag,
-    },
-    {
-        title: 'Regole categorie',
-        href: categoryRules.index(),
-        icon: Tags,
+        icon: HeartPulse,
+        items: [
+            {
+                title: 'Pasti',
+                href: meals.index(),
+                icon: UtensilsCrossed,
+            },
+            {
+                title: 'Lista della spesa',
+                href: shoppingLists.index(),
+                icon: ShoppingCart,
+            },
+            {
+                title: 'Allenamenti',
+                href: workouts.index(),
+                icon: Dumbbell,
+            },
+            {
+                title: 'Vita',
+                href: life.index(),
+                icon: Sprout,
+            },
+        ],
     },
 ];
 </script>
@@ -153,13 +181,10 @@ const footerNavItems: NavItem[] = [
         <SidebarContent>
             <NavMain :items="aiNavItems" label="Assistente" />
             <SidebarSeparator />
-            <NavMain :items="mainNavItems" label="Finanza" />
-            <SidebarSeparator />
-            <NavMain :items="managementNavItems" label="Gestione" />
+            <NavMain :items="mainNavItems" label="Menu" />
         </SidebarContent>
 
         <SidebarFooter>
-            <NavFooter :items="footerNavItems" />
             <NavUser />
         </SidebarFooter>
     </Sidebar>

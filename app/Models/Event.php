@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use Database\Factories\TaskFactory;
+use Database\Factories\EventFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -14,25 +14,30 @@ use Illuminate\Support\Carbon;
  * @property int $user_id
  * @property string $title
  * @property string|null $description
- * @property string $status
- * @property Carbon $task_date
- * @property string|null $scheduled_time HH:MM:SS - set only when the task has been given a
- *     specific time slot on the calendar (see CalendarController); the Task board itself
- *     ignores it, tasks are still grouped purely by task_date there.
- * @property int $position
+ * @property string|null $location
+ * @property string $type
+ * @property Carbon $start_at
+ * @property Carbon|null $end_at
+ * @property bool $all_day
+ * @property string|null $color
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['title', 'description', 'status', 'task_date', 'scheduled_time', 'position'])]
-class Task extends Model
+#[Fillable(['title', 'description', 'location', 'type', 'start_at', 'end_at', 'all_day', 'color'])]
+class Event extends Model
 {
-    /** @use HasFactory<TaskFactory> */
+    /** @use HasFactory<EventFactory> */
     use HasFactory;
 
     /**
+     * "evento" spans a start/end (or a full day/range of days when
+     * all_day); "promemoria" is a single point in time (end_at always
+     * null) - the same distinction Google Calendar and similar apps draw
+     * between an event and a reminder.
+     *
      * @var array<int, string>
      */
-    public const STATUSES = ['todo', 'in_progress', 'done'];
+    public const TYPES = ['evento', 'promemoria'];
 
     /**
      * Get the attributes that should be cast.
@@ -42,7 +47,9 @@ class Task extends Model
     protected function casts(): array
     {
         return [
-            'task_date' => 'date',
+            'start_at' => 'datetime',
+            'end_at' => 'datetime',
+            'all_day' => 'boolean',
         ];
     }
 

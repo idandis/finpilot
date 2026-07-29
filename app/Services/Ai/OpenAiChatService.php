@@ -3,6 +3,7 @@
 namespace App\Services\Ai;
 
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
@@ -26,6 +27,8 @@ class OpenAiChatService
 
     private const SYSTEM_PROMPT = <<<'PROMPT'
         Sei l'assistente finanziario personale di ManageMe, un'app che gestisce finanze, investimenti, task, pasti, lista della spesa, allenamenti e ricordi/diario dell'utente.
+
+        Oggi è {oggi}.
 
         Regole:
         - Rispondi sempre in italiano, in modo diretto e concreto, come un consulente esperto di cui ci si può fidare - non come un chatbot generico che scarica una checklist di consigli standard.
@@ -53,6 +56,18 @@ class OpenAiChatService
     ) {}
 
     /**
+     * Build the system prompt with the current date interpolated, so the
+     * model reasons about "today" from the real date instead of falling
+     * back to its training knowledge cutoff.
+     */
+    private function systemPrompt(): string
+    {
+        $oggi = Carbon::now()->locale('it')->isoFormat('dddd D MMMM YYYY');
+
+        return str_replace('{oggi}', $oggi, self::SYSTEM_PROMPT);
+    }
+
+    /**
      * Send a full conversation (prior turns + the new user message) to
      * OpenAI, resolving any tool calls along the way, and return the
      * assistant's final text reply.
@@ -66,7 +81,7 @@ class OpenAiChatService
         }
 
         $messages = [
-            ['role' => 'system', 'content' => self::SYSTEM_PROMPT],
+            ['role' => 'system', 'content' => $this->systemPrompt()],
             ...$history,
         ];
 

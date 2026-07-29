@@ -1,22 +1,65 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
-import BankCard from '@/components/finance/BankCard.vue';
-import InvestmentPositionsTables from '@/components/finance/InvestmentPositionsTables.vue';
+import { Head, Link, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
+import DashboardQuickActions from '@/components/dashboard/DashboardQuickActions.vue';
+import TodayEventsCard from '@/components/dashboard/TodayEventsCard.vue';
+import TodayMealsCard from '@/components/dashboard/TodayMealsCard.vue';
+import TodayTasksCard from '@/components/dashboard/TodayTasksCard.vue';
+import TodayWorkoutCard from '@/components/dashboard/TodayWorkoutCard.vue';
 import InvestmentSummaryCards from '@/components/finance/InvestmentSummaryCards.vue';
 import PortfolioHistoryChart from '@/components/finance/PortfolioHistoryChart.vue';
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
 import { dashboard } from '@/routes';
-import * as cardRoutes from '@/routes/cards';
 import * as investmentRoutes from '@/routes/investments';
-import type { Card, InvestmentPositions, PortfolioHistory } from '@/types';
+import type {
+    DashboardEvent,
+    DashboardWorkout,
+    InvestmentPositions,
+    Meal,
+    PortfolioHistory,
+    Task,
+} from '@/types';
 
-defineProps<{
-    cards: Card[];
+const props = defineProps<{
     positions: InvestmentPositions;
     portfolioHistory: PortfolioHistory;
     accountBalance: number | null;
+    today: string;
+    todayTasks: Pick<Task, 'id' | 'title' | 'status'>[];
+    todayMeals: Pick<Meal, 'id' | 'title' | 'meal_type'>[];
+    todayWorkout: DashboardWorkout | null;
+    todayEvents: DashboardEvent[];
 }>();
+
+const user = computed(() => usePage().props.auth.user);
+
+function greeting(): string {
+    const hour = new Date().getHours();
+
+    if (hour < 12) {
+        return 'Buongiorno';
+    }
+
+    if (hour < 18) {
+        return 'Buon pomeriggio';
+    }
+
+    return 'Buonasera';
+}
+
+const formattedDate = computed(() =>
+    new Intl.DateTimeFormat('it-IT', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+    }).format(new Date(props.today)),
+);
+
+const hasInvestments = computed(
+    () => props.positions.open.length > 0 || props.positions.closed.length > 0,
+);
 
 defineOptions({
     layout: {
@@ -28,58 +71,58 @@ defineOptions({
 <template>
     <Head title="Dashboard" />
 
-    <div class="mx-auto flex w-full max-w-[64rem] flex-col space-y-8 p-4">
+    <div class="mx-auto flex w-full max-w-[72rem] flex-col space-y-8 p-4">
         <div>
-            <div class="flex items-start justify-between gap-4">
-                <Heading title="Le tue carte" />
-                <Button as-child variant="outline" size="sm" class="shrink-0">
-                    <Link :href="cardRoutes.index()">Vedi tutte</Link>
-                </Button>
-            </div>
+            <h1 class="text-2xl font-semibold">
+                {{ greeting() }}, {{ user.name }}
+            </h1>
+            <p class="text-muted-foreground capitalize">
+                Oggi è: {{ formattedDate }}
+            </p>
+        </div>
 
-            <div
-                v-if="cards.length === 0"
-                class="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground"
-            >
-                Non hai ancora nessuna carta.
-                <Link :href="cardRoutes.create()" class="underline">Creane una</Link>.
-            </div>
-            <div v-else class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                <Link
-                    v-for="card in cards"
-                    :key="card.id"
-                    :href="cardRoutes.show(card.id)"
-                    class="transition-transform hover:-translate-y-0.5"
-                >
-                    <BankCard :card="card" />
-                </Link>
-            </div>
-
-            <InvestmentSummaryCards
-                v-if="positions.open.length > 0 || positions.closed.length > 0"
-                class="mt-6"
-                :positions="positions"
-                :account-balance="accountBalance"
-            />
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <TodayTasksCard :tasks="todayTasks" />
+            <TodayMealsCard :meals="todayMeals" />
+            <TodayWorkoutCard :workout="todayWorkout" />
+            <TodayEventsCard :events="todayEvents" />
         </div>
 
         <div>
             <div class="flex items-start justify-between gap-4">
                 <Heading
                     title="Andamento portafoglio"
-                    description="Investito vs valore di mercato, su tutte le carte da investimenti"
+                    description="Un riferimento veloce: per il dettaglio vai su Investimenti"
                 />
                 <Button as-child variant="outline" size="sm" class="shrink-0">
-                    <Link :href="investmentRoutes.index()">Vai a Investimenti</Link>
+                    <Link :href="investmentRoutes.index()">
+                        Vai a Investimenti
+                    </Link>
                 </Button>
             </div>
-            <PortfolioHistoryChart :history="portfolioHistory" />
+
+            <template v-if="hasInvestments">
+                <InvestmentSummaryCards
+                    class="mt-4"
+                    :positions="positions"
+                    :account-balance="accountBalance"
+                />
+                <PortfolioHistoryChart
+                    class="mt-4"
+                    :history="portfolioHistory"
+                />
+            </template>
+            <div
+                v-else
+                class="mt-4 rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground"
+            >
+                Nessun investimento registrato.
+            </div>
         </div>
 
-        <InvestmentPositionsTables
-            :positions="positions"
-            :show-closed="false"
-            layout="cards"
-        />
+        <div>
+            <Heading title="Scorciatoie" />
+            <DashboardQuickActions class="mt-4" />
+        </div>
     </div>
 </template>

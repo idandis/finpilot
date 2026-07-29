@@ -385,4 +385,75 @@ class TaskControllerTest extends TestCase
         $response->assertForbidden();
         $this->assertDatabaseHas('tasks', ['id' => $task->id, 'task_date' => today()->subDay()->toDateString().' 00:00:00']);
     }
+
+    public function test_schedule_assigns_a_calendar_time_slot()
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => $user->id, 'task_date' => today(), 'scheduled_time' => null]);
+
+        $response = $this->actingAs($user)->patch(route('tasks.schedule', $task), [
+            'task_date' => today()->toDateString(),
+            'scheduled_time' => '09:15',
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('tasks', ['id' => $task->id, 'scheduled_time' => '09:15:00']);
+    }
+
+    public function test_schedule_can_move_a_task_to_a_future_day()
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => $user->id, 'task_date' => today()]);
+
+        $response = $this->actingAs($user)->patch(route('tasks.schedule', $task), [
+            'task_date' => today()->addDay()->toDateString(),
+            'scheduled_time' => '11:00',
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('tasks', [
+            'id' => $task->id,
+            'task_date' => today()->addDay()->toDateString().' 00:00:00',
+            'scheduled_time' => '11:00:00',
+        ]);
+    }
+
+    public function test_schedule_rejects_a_task_from_a_past_day()
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => $user->id, 'task_date' => today()->subDay()]);
+
+        $response = $this->actingAs($user)->patch(route('tasks.schedule', $task), [
+            'task_date' => today()->toDateString(),
+            'scheduled_time' => '09:00',
+        ]);
+
+        $response->assertForbidden();
+    }
+
+    public function test_schedule_rejects_moving_a_task_into_the_past()
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => $user->id, 'task_date' => today()]);
+
+        $response = $this->actingAs($user)->patch(route('tasks.schedule', $task), [
+            'task_date' => today()->subDay()->toDateString(),
+            'scheduled_time' => '09:00',
+        ]);
+
+        $response->assertSessionHasErrors('task_date');
+    }
+
+    public function test_schedule_is_forbidden_for_another_users_task()
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => User::factory(), 'task_date' => today()]);
+
+        $response = $this->actingAs($user)->patch(route('tasks.schedule', $task), [
+            'task_date' => today()->toDateString(),
+            'scheduled_time' => '09:00',
+        ]);
+
+        $response->assertForbidden();
+    }
 }

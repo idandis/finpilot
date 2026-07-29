@@ -14,11 +14,14 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $user_id
  * @property Carbon $workout_date
+ * @property string|null $scheduled_time HH:MM:SS - set only when the workout has been given
+ *     a specific time slot on the calendar (see CalendarController); the Allenamenti board
+ *     itself ignores it, workouts are still grouped purely by workout_date there.
  * @property string|null $title
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['workout_date', 'title'])]
+#[Fillable(['workout_date', 'scheduled_time', 'title'])]
 class Workout extends Model
 {
     /** @use HasFactory<WorkoutFactory> */

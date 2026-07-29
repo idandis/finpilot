@@ -85,25 +85,25 @@ const realizedGain = computed(
 
 <template>
     <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        <div class="rounded-lg border p-4">
+        <div class="rounded-lg bg-muted/40 p-4">
             <p class="text-xs text-muted-foreground">Investito</p>
             <p class="text-lg font-semibold">
                 {{ formatCurrency(investedValue) }}
             </p>
         </div>
-        <div class="rounded-lg border p-4">
+        <div class="rounded-lg bg-muted/40 p-4">
             <p class="text-xs text-muted-foreground">Saldo conto</p>
             <p class="text-lg font-semibold">
                 {{ formatCurrencyOrDash(accountBalance) }}
             </p>
         </div>
-        <div class="rounded-lg border p-4">
+        <div class="rounded-lg bg-muted/40 p-4">
             <p class="text-xs text-muted-foreground">Patrimonio totale</p>
             <p class="text-lg font-semibold">
                 {{ formatCurrency(totalWealth) }}
             </p>
         </div>
-        <div class="rounded-lg border p-4">
+        <div class="rounded-lg bg-muted/40 p-4">
             <p class="text-xs text-muted-foreground">Andamento</p>
             <p
                 class="text-lg font-semibold"
@@ -121,7 +121,7 @@ const realizedGain = computed(
                 {{ formatPercent(unrealizedGainPercent) }}
             </p>
         </div>
-        <div class="rounded-lg border p-4">
+        <div class="rounded-lg bg-muted/40 p-4">
             <p class="text-xs text-muted-foreground">
                 Realizzato dall'inizio
             </p>

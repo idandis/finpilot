@@ -122,6 +122,28 @@ class WorkoutController extends Controller
     }
 
     /**
+     * Assigns (or changes) the workout's calendar time slot - dragged from
+     * the Calendario page, not the Allenamenti board itself (which never
+     * shows or needs scheduled_time).
+     */
+    public function schedule(Request $request, Workout $workout): RedirectResponse
+    {
+        abort_unless($workout->user_id === $request->user()->id, 403);
+
+        $validated = $request->validate([
+            'workout_date' => ['required', 'date'],
+            'scheduled_time' => ['required', 'date_format:H:i'],
+        ]);
+
+        $workout->update([
+            'workout_date' => $validated['workout_date'],
+            'scheduled_time' => Carbon::createFromFormat('H:i', $validated['scheduled_time'])->format('H:i:s'),
+        ]);
+
+        return back();
+    }
+
+    /**
      * Falls back to the current week on a missing or malformed date - a
      * workout plan is meant to be filled in ahead of time.
      */

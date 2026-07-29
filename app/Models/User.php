@@ -168,4 +168,12 @@ class User extends Authenticatable implements PasskeyUser
     {
         return $this->hasMany(Memory::class);
     }
+
+    /**
+     * @return HasMany<Event, $this>
+     */
+    public function events(): HasMany
+    {
+        return $this->hasMany(Event::class);
+    }
 }

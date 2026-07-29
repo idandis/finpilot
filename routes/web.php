@@ -20,3 +20,4 @@ require __DIR__.'/dishes.php';
 require __DIR__.'/workouts.php';
 require __DIR__.'/exercises.php';
 require __DIR__.'/life.php';
+require __DIR__.'/calendar.php';

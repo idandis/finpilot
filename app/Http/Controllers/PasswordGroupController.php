@@ -24,7 +24,7 @@ class PasswordGroupController extends Controller
             ->with(['entries' => fn ($query) => $query
                 ->orderBy('platform_name')
                 ->select(['id', 'password_group_id', 'platform_name', 'username', 'created_at'])])
-            ->get(['id', 'user_id', 'name']);
+            ->get(['id', 'user_id', 'name', 'icon']);
 
         return Inertia::render('Passwords/Index', [
             'groups' => $groups,

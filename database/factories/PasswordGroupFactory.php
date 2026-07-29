@@ -21,6 +21,7 @@ class PasswordGroupFactory extends Factory
         return [
             'user_id' => User::factory(),
             'name' => fake()->randomElement(['Lavoro', 'Personale', 'Famiglia', 'Svago']),
+            'icon' => fake()->randomElement(PasswordGroup::ICONS),
         ];
     }
 }

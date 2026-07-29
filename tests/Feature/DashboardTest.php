@@ -3,10 +3,15 @@
 namespace Tests\Feature;
 
 use App\Models\Card;
+use App\Models\Event;
 use App\Models\FinancialAccount;
+use App\Models\Meal;
+use App\Models\Task;
 use App\Models\Transaction;
 use App\Models\TransactionCategory;
 use App\Models\User;
+use App\Models\Workout;
+use App\Models\WorkoutExercise;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -29,17 +34,76 @@ class DashboardTest extends TestCase
         $response->assertOk();
     }
 
-    public function test_it_shows_all_of_the_users_cards()
+    public function test_it_shows_todays_tasks_but_not_other_days()
     {
         $user = User::factory()->create();
-        $account = FinancialAccount::factory()->for($user)->create();
-        Card::factory()->for($account, 'financialAccount')->create(['user_id' => $user->id, 'name' => 'Trade Republic']);
-        Card::factory()->for($account, 'financialAccount')->create(['user_id' => $user->id, 'name' => 'Carta di debito']);
+        Task::factory()->for($user)->create(['title' => 'Oggi', 'task_date' => now()->toDateString()]);
+        Task::factory()->for($user)->create(['title' => 'Domani', 'task_date' => now()->addDay()->toDateString()]);
 
         $response = $this->actingAs($user)->get(route('dashboard'));
 
         $response->assertOk();
-        $response->assertInertia(fn ($page) => $page->has('cards', 2));
+        $response->assertInertia(fn ($page) => $page
+            ->has('todayTasks', 1)
+            ->where('todayTasks.0.title', 'Oggi')
+        );
+    }
+
+    public function test_it_shows_todays_meals_but_not_other_days()
+    {
+        $user = User::factory()->create();
+        Meal::factory()->for($user)->create(['title' => 'Pasta', 'meal_date' => now()->toDateString(), 'meal_type' => 'lunch']);
+        Meal::factory()->for($user)->create(['title' => 'Ieri', 'meal_date' => now()->subDay()->toDateString()]);
+
+        $response = $this->actingAs($user)->get(route('dashboard'));
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->has('todayMeals', 1)
+            ->where('todayMeals.0.title', 'Pasta')
+        );
+    }
+
+    public function test_it_shows_todays_workout_with_its_exercises()
+    {
+        $user = User::factory()->create();
+        $workout = Workout::factory()->for($user)->create(['workout_date' => now()->toDateString(), 'title' => 'Push day']);
+        $exercise = WorkoutExercise::factory()->for($workout)->create(['sets_count' => 3, 'reps_count' => 10]);
+
+        $response = $this->actingAs($user)->get(route('dashboard'));
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->where('todayWorkout.title', 'Push day')
+            ->where('todayWorkout.exercises.0.exercise_name', $exercise->exercise->name)
+            ->where('todayWorkout.exercises.0.sets_count', 3)
+        );
+    }
+
+    public function test_it_reports_no_workout_when_none_is_planned_for_today()
+    {
+        $user = User::factory()->create();
+        Workout::factory()->for($user)->create(['workout_date' => now()->addDay()->toDateString()]);
+
+        $response = $this->actingAs($user)->get(route('dashboard'));
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page->where('todayWorkout', null));
+    }
+
+    public function test_it_shows_todays_events_but_not_other_days()
+    {
+        $user = User::factory()->create();
+        Event::factory()->for($user)->create(['title' => 'Riunione', 'start_at' => now()->setTime(10, 0), 'end_at' => now()->setTime(11, 0)]);
+        Event::factory()->for($user)->create(['title' => 'La prossima settimana', 'start_at' => now()->addWeek(), 'end_at' => now()->addWeek()->addHour()]);
+
+        $response = $this->actingAs($user)->get(route('dashboard'));
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->has('todayEvents', 1)
+            ->where('todayEvents.0.title', 'Riunione')
+        );
     }
 
     public function test_it_only_includes_investment_data_for_investment_flagged_cards()

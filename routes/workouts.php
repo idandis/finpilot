@@ -9,5 +9,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('workouts', [WorkoutController::class, 'store'])->name('workouts.store');
     Route::delete('workouts/{workout}/exercises/{workoutExercise}', [WorkoutController::class, 'removeExercise'])->name('workouts.exercises.destroy');
     Route::patch('workout-sets/{workoutSet}/toggle', [WorkoutController::class, 'toggleSet'])->name('workout-sets.toggle');
+    Route::patch('workouts/{workout}/schedule', [WorkoutController::class, 'schedule'])->name('workouts.schedule');
     Route::delete('workouts/{workout}', [WorkoutController::class, 'destroy'])->name('workouts.destroy');
 });

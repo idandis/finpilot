@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests\Passwords;
 
+use App\Models\PasswordGroup;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class PasswordGroupUpdateRequest extends FormRequest
 {
@@ -24,6 +26,7 @@ class PasswordGroupUpdateRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
+            'icon' => ['nullable', 'string', Rule::in(PasswordGroup::ICONS)],
         ];
     }
 }

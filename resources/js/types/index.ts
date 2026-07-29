@@ -1,4 +1,6 @@
 export * from './auth';
+export * from './calendar';
+export * from './dashboard';
 export * from './dishes';
 export * from './exercises';
 export * from './finance';

@@ -143,6 +143,31 @@ class TaskController extends Controller
         return back();
     }
 
+    /**
+     * Assigns (or changes) the task's calendar time slot - dragged from the
+     * Calendario page, not the Task board itself (which never shows or
+     * needs scheduled_time). Same past-day rule as move()/destroy(): a task
+     * already on a past day can't be touched, and it can't be dragged onto
+     * one either.
+     */
+    public function schedule(Request $request, Task $task): RedirectResponse
+    {
+        abort_unless($task->user_id === $request->user()->id, 403);
+        abort_unless(! $task->task_date->lt(Carbon::today()), 403, 'Non è possibile modificare i task dei giorni passati.');
+
+        $validated = $request->validate([
+            'task_date' => ['required', 'date', 'after_or_equal:today'],
+            'scheduled_time' => ['required', 'date_format:H:i'],
+        ]);
+
+        $task->update([
+            'task_date' => $validated['task_date'],
+            'scheduled_time' => Carbon::createFromFormat('H:i', $validated['scheduled_time'])->format('H:i:s'),
+        ]);
+
+        return back();
+    }
+
     public function destroy(Request $request, Task $task): RedirectResponse
     {
         abort_unless($task->user_id === $request->user()->id, 403);
