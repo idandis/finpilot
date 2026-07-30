@@ -120,6 +120,15 @@ class InvestmentController extends Controller
     {
         $result = $this->refreshService->refresh(self::REFRESH_BUDGET_CAP, force: true);
 
+        \Log::info('Investment refresh result', [
+            'user_id' => $request->user()->id,
+            'had_open_positions' => $result->hadOpenPositions,
+            'budget_exhausted_upfront' => $result->budgetExhaustedUpfront,
+            'rates_refreshed' => $result->ratesRefreshed,
+            'instruments_refreshed' => $result->instrumentsRefreshed,
+            'calls_remaining' => $result->callsRemaining,
+        ]);
+
         Inertia::flash('toast', [
             'type' => $result->anythingRefreshed() ? 'success' : 'info',
             'message' => $this->refreshToastMessage($result),
