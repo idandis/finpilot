@@ -196,17 +196,33 @@ class InvestmentPriceRefreshService
     private function openIsins(): Collection
     {
         $investmentCategoryIds = TransactionCategory::query()
+            ->where(fn ($query) => $query->whereNull('user_id')->orWhereNotNull('user_id'))
             ->where('name', 'Investimenti')
             ->pluck('id');
+
+        \Log::debug('Investment refresh: category search', [
+            'category_ids_found' => $investmentCategoryIds->count(),
+            'categories' => $investmentCategoryIds->all(),
+        ]);
 
         $transactions = Transaction::query()
             ->whereNotNull('isin')
             ->whereIn('transaction_category_id', $investmentCategoryIds)
             ->get();
 
-        return collect($this->calculator->calculate($transactions)['open'])
+        \Log::debug('Investment refresh: transactions found', [
+            'count' => $transactions->count(),
+        ]);
+
+        $positions = collect($this->calculator->calculate($transactions)['open'])
             ->pluck('isin')
             ->unique()
             ->values();
+
+        \Log::debug('Investment refresh: open positions', [
+            'isins' => $positions->all(),
+        ]);
+
+        return $positions;
     }
 }
