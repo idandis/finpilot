@@ -45,14 +45,22 @@ function escapeHtml(text: string): string {
 
 function renderMarkdown(content: string): string {
     let html = escapeHtml(content);
+    // Handle LaTeX equations first (block and inline)
+    html = html.replace(/\\\[([\s\S]*?)\\\]/g, '<div class="my-3 bg-muted/30 p-3 rounded overflow-x-auto text-center font-mono text-sm">\\[$1\\]</div>');
+    html = html.replace(/\$\$([\s\S]*?)\$\$/g, '<div class="my-3 bg-muted/30 p-3 rounded overflow-x-auto text-center font-mono text-sm">$$\$1$$</div>');
+    html = html.replace(/\$([^\$\n]+?)\$/g, '<code class="bg-muted/50 px-1.5 py-0.5 rounded text-sm">$1</code>');
+    // Handle headings
     html = html.replace(/^### (.*?)$/gm, '<h3 class="font-semibold text-base mt-2 mb-1">$1</h3>');
     html = html.replace(/^## (.*?)$/gm, '<h2 class="font-bold text-lg mt-3 mb-2">$1</h2>');
     html = html.replace(/^# (.*?)$/gm, '<h1 class="font-bold text-xl mt-4 mb-2">$1</h1>');
+    // Handle bold and italic
     html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold">$1</strong>');
     html = html.replace(/__(.*?)__/g, '<strong class="font-semibold">$1</strong>');
     html = html.replace(/\*(.*?)\*/g, '<em class="italic">$1</em>');
     html = html.replace(/_(.*?)_/g, '<em class="italic">$1</em>');
-    html = html.replace(/`(.*?)`/g, '<code class="bg-muted/50 px-1.5 py-0.5 rounded text-sm">$1</code>');
+    // Handle inline code (excluding LaTeX)
+    html = html.replace(/`([^\$]*?)`/g, '<code class="bg-muted/50 px-1.5 py-0.5 rounded text-sm">$1</code>');
+    // Handle line breaks last
     html = html.replace(/\n/g, '<br/>');
     return html;
 }
