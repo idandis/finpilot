@@ -69,7 +69,20 @@ class InvestmentPositionController extends Controller
             'instrumentName' => $name,
             'positions' => $this->positionCalculator->calculate($transactions),
             'portfolioHistory' => $this->historyCalculator->calculate($transactions),
-            'transactions' => $transactions->values(),
+            'transactions' => $transactions->map(function ($transaction) {
+                return [
+                    'id' => $transaction->id,
+                    'transaction_date' => $transaction->transaction_date,
+                    'amount' => $transaction->amount,
+                    'direction' => $transaction->direction,
+                    'description' => $transaction->description,
+                    'isin' => $transaction->isin,
+                    'quantity' => $transaction->quantity,
+                    'unit_price' => $transaction->quantity && $transaction->quantity != 0
+                        ? (string) ($transaction->amount / $transaction->quantity)
+                        : null,
+                ];
+            })->values(),
             'notes' => $notes,
             'news' => [
                 'articles' => $newsStatus['articles']->values(),

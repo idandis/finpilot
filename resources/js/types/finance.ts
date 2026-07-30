@@ -179,6 +179,7 @@ export type PositionTransaction = {
     direction: TransactionDirection;
     isin: string | null;
     quantity: string | null;
+    unit_price: string | null;
 };
 
 export type InvestmentNote = {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Form, Head } from '@inertiajs/vue3';
+import { Form, Head, router } from '@inertiajs/vue3';
 import InvestmentController from '@/actions/App/Http/Controllers/Finance/InvestmentController';
 import InvestmentPositionsTables from '@/components/finance/InvestmentPositionsTables.vue';
 import InvestmentSummaryCards from '@/components/finance/InvestmentSummaryCards.vue';
@@ -11,6 +11,10 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import * as investmentRoutes from '@/routes/investments';
 import type { InvestmentTab } from '@/types';
+
+function reloadAfterRefresh() {
+    setTimeout(() => router.reload(), 500);
+}
 
 const props = defineProps<{
     tabs: InvestmentTab[];
@@ -37,6 +41,7 @@ defineOptions({
             <div class="flex shrink-0 gap-2">
                 <Form
                     v-bind="InvestmentController.refresh.form()"
+                    @submit="reloadAfterRefresh"
                     v-slot="{ processing }"
                 >
                     <Button
@@ -49,6 +54,7 @@ defineOptions({
                 </Form>
                 <Form
                     v-bind="InvestmentController.refreshRealtime.form()"
+                    @submit="reloadAfterRefresh"
                     v-slot="{ processing }"
                 >
                     <Button

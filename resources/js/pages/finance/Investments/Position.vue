@@ -184,6 +184,7 @@ watch([newsYearFilter, newsMonthFilter, newsDayFilter], () => {
                         <TableHead>Data</TableHead>
                         <TableHead>Descrizione</TableHead>
                         <TableHead class="text-right">Quantità</TableHead>
+                        <TableHead class="text-right">Prezzo unitario</TableHead>
                         <TableHead class="text-right">Importo</TableHead>
                     </TableRow>
                 </TableHeader>
@@ -193,6 +194,9 @@ watch([newsYearFilter, newsMonthFilter, newsDayFilter], () => {
                         <TableCell class="max-w-xs truncate">{{ transaction.description }}</TableCell>
                         <TableCell class="text-right tabular-nums">
                             {{ transaction.quantity ? formatQuantity(transaction.quantity) : '—' }}
+                        </TableCell>
+                        <TableCell class="text-right tabular-nums">
+                            {{ transaction.unit_price ? formatCurrency(transaction.unit_price) : '—' }}
                         </TableCell>
                         <TableCell
                             class="text-right font-medium"
