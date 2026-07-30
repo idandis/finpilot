@@ -2,7 +2,6 @@
 import { Head } from '@inertiajs/vue3';
 import { ArrowDown, ArrowUp, MessageSquarePlus, Sparkles } from '@lucide/vue';
 import { nextTick, reactive, ref } from 'vue';
-import { marked } from 'marked';
 import { toast } from 'vue-sonner';
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
@@ -38,8 +37,24 @@ function startNewChat() {
     input.value = '';
 }
 
+function escapeHtml(text: string): string {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 function renderMarkdown(content: string): string {
-    return marked(content, { breaks: true });
+    let html = escapeHtml(content);
+    html = html.replace(/^### (.*?)$/gm, '<h3 class="font-semibold text-base mt-2 mb-1">$1</h3>');
+    html = html.replace(/^## (.*?)$/gm, '<h2 class="font-bold text-lg mt-3 mb-2">$1</h2>');
+    html = html.replace(/^# (.*?)$/gm, '<h1 class="font-bold text-xl mt-4 mb-2">$1</h1>');
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold">$1</strong>');
+    html = html.replace(/__(.*?)__/g, '<strong class="font-semibold">$1</strong>');
+    html = html.replace(/\*(.*?)\*/g, '<em class="italic">$1</em>');
+    html = html.replace(/_(.*?)_/g, '<em class="italic">$1</em>');
+    html = html.replace(/`(.*?)`/g, '<code class="bg-muted/50 px-1.5 py-0.5 rounded text-sm">$1</code>');
+    html = html.replace(/\n/g, '<br/>');
+    return html;
 }
 
 function handleScroll(e: Event) {
