@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { KanbanSquare } from '@lucide/vue';
+import { KanbanSquare, Plus } from '@lucide/vue';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import * as taskRoutes from '@/routes/tasks';
 import type { Task, TaskStatus } from '@/types';
@@ -26,10 +27,23 @@ const statusVariant: Record<TaskStatus, 'outline' | 'secondary' | 'default'> = {
 <template>
     <Card class="border-none bg-muted/40 shadow-none">
         <CardHeader>
-            <CardTitle class="flex items-center gap-2 text-base">
-                <KanbanSquare class="size-4 text-muted-foreground" />
-                Task di oggi
-            </CardTitle>
+            <div class="flex items-center justify-between">
+                <CardTitle class="flex items-center gap-2 text-base">
+                    <KanbanSquare class="size-4 text-muted-foreground" />
+                    Task di oggi
+                </CardTitle>
+                <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    class="size-6"
+                    title="Crea nuovo task"
+                    as-child
+                >
+                    <Link :href="taskRoutes.index()">
+                        <Plus class="size-4" />
+                    </Link>
+                </Button>
+            </div>
         </CardHeader>
         <CardContent>
             <p v-if="tasks.length === 0" class="text-sm text-muted-foreground">
@@ -43,7 +57,7 @@ const statusVariant: Record<TaskStatus, 'outline' | 'secondary' | 'default'> = {
                 >
                     <span
                         :class="[
-                            'truncate',
+                            'min-w-0 flex-1 truncate',
                             task.status === 'done' &&
                                 'text-muted-foreground line-through',
                         ]"

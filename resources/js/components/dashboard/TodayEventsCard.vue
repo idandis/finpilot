@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { CalendarDays } from '@lucide/vue';
+import { CalendarDays, Plus } from '@lucide/vue';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import * as calendarRoutes from '@/routes/calendar';
 import type { DashboardEvent } from '@/types';
@@ -25,10 +26,23 @@ function timeLabel(event: DashboardEvent): string {
 <template>
     <Card class="border-none bg-muted/40 shadow-none">
         <CardHeader>
-            <CardTitle class="flex items-center gap-2 text-base">
-                <CalendarDays class="size-4 text-muted-foreground" />
-                Eventi di oggi
-            </CardTitle>
+            <div class="flex items-center justify-between">
+                <CardTitle class="flex items-center gap-2 text-base">
+                    <CalendarDays class="size-4 text-muted-foreground" />
+                    Eventi di oggi
+                </CardTitle>
+                <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    class="size-6"
+                    title="Crea nuovo evento"
+                    as-child
+                >
+                    <Link :href="calendarRoutes.index()">
+                        <Plus class="size-4" />
+                    </Link>
+                </Button>
+            </div>
         </CardHeader>
         <CardContent>
             <p v-if="events.length === 0" class="text-sm text-muted-foreground">
@@ -40,7 +54,7 @@ function timeLabel(event: DashboardEvent): string {
                     :key="event.id"
                     class="flex items-center justify-between gap-2 text-sm"
                 >
-                    <span class="truncate">{{ event.title }}</span>
+                    <span class="min-w-0 flex-1 truncate">{{ event.title }}</span>
                     <Badge variant="outline">{{ timeLabel(event) }}</Badge>
                 </li>
             </ul>

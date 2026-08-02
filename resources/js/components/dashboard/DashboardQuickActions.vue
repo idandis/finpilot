@@ -2,14 +2,18 @@
 import { Link } from '@inertiajs/vue3';
 import {
     CalendarDays,
+    CreditCard,
     Dumbbell,
     KanbanSquare,
+    PiggyBank,
     ShoppingCart,
     Sprout,
     TrendingUp,
     UtensilsCrossed,
 } from '@lucide/vue';
+import * as budgetRoutes from '@/routes/budgets';
 import * as calendarRoutes from '@/routes/calendar';
+import * as cardRoutes from '@/routes/cards';
 import * as investmentRoutes from '@/routes/investments';
 import * as lifeRoutes from '@/routes/life';
 import * as mealRoutes from '@/routes/meals';
@@ -48,6 +52,16 @@ const actions = [
         title: 'Vai a Investimenti',
         href: investmentRoutes.index(),
         icon: TrendingUp,
+    },
+    {
+        title: 'Gestisci budget',
+        href: budgetRoutes.index(),
+        icon: PiggyBank,
+    },
+    {
+        title: 'Carte di credito',
+        href: cardRoutes.index(),
+        icon: CreditCard,
     },
 ];
 </script>

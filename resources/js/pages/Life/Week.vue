@@ -116,14 +116,51 @@ const editingMemory = computed(() => memoryDialogTarget.value?.memory ?? null);
 
 function openCreateMemoryDialog(date: string) {
     memoryDialogTarget.value = { date, memory: null };
+    selectedMoodForForm.value = null;
 }
 
 function openEditMemoryDialog(date: string, memory: Memory) {
     memoryDialogTarget.value = { date, memory };
+    selectedMoodForForm.value = memory.mood ?? null;
 }
 
 function closeMemoryDialog() {
     memoryDialogTarget.value = null;
+}
+
+const MOOD_EMOJIS: Record<string, string> = {
+    pessimo: '😢',
+    difficile: '😟',
+    neutro: '😐',
+    buono: '😊',
+    ottimo: '😄',
+};
+
+const selectedMoodForForm = ref<string | null>(null);
+
+function setSelectedMood(mood: string | null) {
+    selectedMoodForForm.value = mood;
+}
+
+function isToday(dateString: string): boolean {
+    const today = new Date();
+    const dateToCheck = new Date(`${dateString}T00:00:00`);
+
+    return (
+        today.getFullYear() === dateToCheck.getFullYear() &&
+        today.getMonth() === dateToCheck.getMonth() &&
+        today.getDate() === dateToCheck.getDate()
+    );
+}
+
+const photoModal = ref<{ title: string; url: string } | null>(null);
+
+function openPhotoModal(title: string, url: string) {
+    photoModal.value = { title, url };
+}
+
+function closePhotoModal() {
+    photoModal.value = null;
 }
 </script>
 
@@ -175,13 +212,21 @@ function closeMemoryDialog() {
                             class="hidden size-3 shrink-0 self-start justify-self-center rounded-full bg-primary ring-4 ring-background sm:col-start-2 sm:mt-4 sm:block"
                         />
                         <div
-                            class="rounded-xl bg-muted/40 p-4"
-                            :class="index % 2 === 0 ? 'sm:col-start-1' : 'sm:col-start-3 sm:row-start-1'"
+                            class="rounded-xl bg-muted/40 p-4 transition"
+                            :class="[
+                                index % 2 === 0 ? 'sm:col-start-1' : 'sm:col-start-3 sm:row-start-1',
+                                isToday(day.date) && 'border-2 border-primary',
+                            ]"
                         >
                             <div class="flex items-center justify-between gap-2">
-                                <h4 class="text-sm font-medium capitalize">
-                                    {{ dayLabel(day.date) }}
-                                </h4>
+                                <div class="flex items-center gap-2">
+                                    <h4 class="text-sm font-medium capitalize">
+                                        {{ dayLabel(day.date) }}
+                                    </h4>
+                                    <Badge v-if="isToday(day.date)" variant="outline" class="text-xs">
+                                        Oggi
+                                    </Badge>
+                                </div>
                                 <Button
                                     variant="ghost"
                                     size="icon-sm"
@@ -219,21 +264,25 @@ function closeMemoryDialog() {
                                 <div
                                     v-for="memory in day.memories"
                                     :key="memory.id"
-                                    class="group flex gap-3 rounded-lg bg-background/60 p-3"
+                                    class="group flex gap-4 rounded-lg bg-background/60 p-4"
                                 >
                                     <img
                                         v-if="memory.photo_url"
                                         :src="memory.photo_url"
                                         :alt="memory.title"
-                                        class="size-14 shrink-0 rounded-md object-cover"
+                                        class="size-16 shrink-0 cursor-pointer rounded-md object-cover transition hover:opacity-80"
+                                        role="button"
+                                        tabindex="0"
+                                        @click="openPhotoModal(memory.title, memory.photo_url)"
+                                        @keydown.enter="openPhotoModal(memory.title, memory.photo_url)"
                                     />
-                                    <div class="min-w-0 flex-1 space-y-1">
+                                    <div class="min-w-0 flex-1 space-y-2">
                                         <div class="flex items-start justify-between gap-2">
-                                            <p class="truncate text-sm font-medium">
+                                            <p class="truncate text-base font-medium">
                                                 {{ memory.title }}
                                             </p>
                                             <div
-                                                class="flex shrink-0 gap-0.5 opacity-0 group-hover:opacity-100"
+                                                class="flex shrink-0 gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                                             >
                                                 <Button
                                                     variant="ghost"
@@ -439,24 +488,42 @@ function closeMemoryDialog() {
                         </div>
                     </div>
                     <div class="grid gap-2">
-                        <Label for="memory-mood">Mood (opzionale)</Label>
-                        <select
-                            id="memory-mood"
+                        <Label>Mood (opzionale)</Label>
+                        <input
+                            type="hidden"
                             name="mood"
-                            class="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                        >
-                            <option value="">Nessun mood</option>
-                            <option
+                            :value="selectedMoodForForm ?? ''"
+                        />
+                        <div class="flex flex-wrap gap-2">
+                            <button
+                                type="button"
+                                class="flex size-12 items-center justify-center rounded-full transition"
+                                :class="
+                                    selectedMoodForForm === null
+                                        ? 'bg-primary text-primary-foreground text-lg'
+                                        : 'bg-muted text-lg hover:bg-muted/70'
+                                "
+                                title="Nessun mood"
+                                @click="setSelectedMood(null)"
+                            >
+                                —
+                            </button>
+                            <button
                                 v-for="(label, key) in moods"
                                 :key="key"
-                                :value="key"
-                                :selected="
-                                    editingMemory ? editingMemory.mood === key : undefined
+                                type="button"
+                                class="flex size-12 items-center justify-center rounded-full transition text-xl"
+                                :class="
+                                    selectedMoodForForm === key
+                                        ? 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2 ring-offset-background'
+                                        : 'bg-muted text-foreground hover:bg-muted/70'
                                 "
+                                :title="label"
+                                @click="setSelectedMood(key as string)"
                             >
-                                {{ label }}
-                            </option>
-                        </select>
+                                {{ MOOD_EMOJIS[key] || '😐' }}
+                            </button>
+                        </div>
                         <InputError :message="errors.mood" />
                     </div>
                     <div class="grid gap-2">
@@ -483,6 +550,28 @@ function closeMemoryDialog() {
                         editingMemory ? 'Salva modifiche' : 'Aggiungi ricordo'
                     }}</Button>
                 </Form>
+            </DialogContent>
+        </Dialog>
+
+        <Dialog
+            :open="photoModal !== null"
+            @update:open="
+                (open) => {
+                    if (!open) closePhotoModal();
+                }
+            "
+        >
+            <DialogContent class="max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle v-if="photoModal">{{ photoModal.title }}</DialogTitle>
+                </DialogHeader>
+                <div v-if="photoModal" class="flex justify-center">
+                    <img
+                        :src="photoModal.url"
+                        :alt="photoModal.title"
+                        class="max-h-96 w-auto rounded-lg object-contain"
+                    />
+                </div>
             </DialogContent>
         </Dialog>
     </div>

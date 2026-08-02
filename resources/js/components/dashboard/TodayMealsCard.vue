@@ -14,8 +14,8 @@ const mealTypeLabel: Record<MealType, string> = {
     dinner: 'Cena',
 };
 
-function mealFor(type: MealType) {
-    return props.meals.find((meal) => meal.meal_type === type);
+function mealsFor(type: MealType) {
+    return props.meals.filter((meal) => meal.meal_type === type);
 }
 </script>
 
@@ -31,17 +31,26 @@ function mealFor(type: MealType) {
             <p v-if="meals.length === 0" class="text-sm text-muted-foreground">
                 Nessun pasto pianificato per oggi.
             </p>
-            <ul v-else class="space-y-2">
+            <ul v-else class="space-y-3">
                 <li
                     v-for="type in ['lunch', 'dinner'] as MealType[]"
                     :key="type"
-                    class="flex items-center justify-between gap-2 text-sm"
+                    class="space-y-1"
                 >
-                    <span class="text-muted-foreground">{{
-                        mealTypeLabel[type]
-                    }}</span>
-                    <span class="truncate">
-                        {{ mealFor(type)?.title ?? 'Non pianificato' }}
+                    <span class="text-xs font-medium text-muted-foreground">
+                        {{ mealTypeLabel[type] }}
+                    </span>
+                    <ul v-if="mealsFor(type).length > 0" class="space-y-1">
+                        <li
+                            v-for="meal in mealsFor(type)"
+                            :key="meal.id"
+                            class="flex min-w-0 text-sm"
+                        >
+                            <span class="min-w-0 truncate">{{ meal.title }}</span>
+                        </li>
+                    </ul>
+                    <span v-else class="block text-sm text-muted-foreground">
+                        Non pianificato
                     </span>
                 </li>
             </ul>

@@ -33,12 +33,17 @@ const WEEK_RANGE_FORMATTER = new Intl.DateTimeFormat('it-IT', {
     month: 'short',
 });
 
+const MONTH_FORMATTER = new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+});
+
 const isCurrentYear = computed(() => props.year === props.currentYear);
 
-type MetricKey = 'none' | keyof LifeWeekMetrics;
+type MetricKey = 'none' | 'season' | keyof LifeWeekMetrics;
 
 const METRIC_OPTIONS: { key: MetricKey; label: string }[] = [
     { key: 'none', label: 'Nessuna' },
+    { key: 'season', label: 'Stagione' },
     { key: 'productivity', label: 'Produttività' },
     { key: 'workouts', label: 'Allenamenti' },
     { key: 'mood', label: 'Mood medio' },
@@ -49,8 +54,33 @@ const METRIC_OPTIONS: { key: MetricKey; label: string }[] = [
 // switching which one colors the grid never needs a round trip.
 const selectedMetric = ref<MetricKey>('none');
 
+function getMonthAbbr(dateStr: string): string {
+    return MONTH_FORMATTER.format(new Date(`${dateStr}T00:00:00`));
+}
+
+function getSeasonColor(dateStr: string): string {
+    const date = new Date(`${dateStr}T00:00:00`);
+    const month = date.getMonth();
+
+    if (month === 11 || month === 0 || month === 1) {
+        return 'bg-cyan-500 text-white';
+    }
+
+    if (month >= 2 && month <= 4) {
+        return 'bg-green-500 text-white';
+    }
+
+    if (month >= 5 && month <= 7) {
+        return 'bg-yellow-500 text-yellow-950';
+    }
+
+    return 'bg-orange-500 text-white';
+}
+
 function metricValue(week: LifeWeekSummary): number | null {
-    return selectedMetric.value === 'none' ? null : week.metrics[selectedMetric.value];
+    return selectedMetric.value === 'none' || selectedMetric.value === 'season'
+        ? null
+        : week.metrics[selectedMetric.value];
 }
 
 function squareColorClass(week: LifeWeekSummary): string {
@@ -58,6 +88,10 @@ function squareColorClass(week: LifeWeekSummary): string {
         return week.isCurrent
             ? 'bg-primary text-primary-foreground'
             : 'bg-muted/60 text-muted-foreground';
+    }
+
+    if (selectedMetric.value === 'season') {
+        return getSeasonColor(week.start);
     }
 
     const value = metricValue(week);
@@ -161,7 +195,7 @@ function weekTitle(week: LifeWeekSummary) {
                 :key="week.week"
                 :href="lifeRoutes.week([year, week.week])"
                 :title="weekTitle(week)"
-                class="flex aspect-square flex-col items-center justify-center rounded-lg text-xs font-medium transition-colors hover:opacity-80"
+                class="flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg transition-colors hover:opacity-80"
                 :class="[
                     squareColorClass(week),
                     selectedMetric !== 'none' && week.isCurrent
@@ -169,7 +203,8 @@ function weekTitle(week: LifeWeekSummary) {
                         : '',
                 ]"
             >
-                {{ week.week }}
+                <span class="text-xs font-semibold">{{ week.week }}</span>
+                <span class="text-[10px] opacity-75">{{ getMonthAbbr(week.start) }}</span>
             </Link>
         </div>
     </div>
