@@ -7,9 +7,13 @@ use App\Http\Controllers\Finance\CategoryController;
 use App\Http\Controllers\Finance\CategoryRuleController;
 use App\Http\Controllers\Finance\CompanyAnalysisController;
 use App\Http\Controllers\Finance\InvestmentController;
+use App\Http\Controllers\Finance\InvestmentDecisionController;
+use App\Http\Controllers\Finance\InvestmentEventController;
+use App\Http\Controllers\Finance\InvestmentJournalEntryController;
 use App\Http\Controllers\Finance\InvestmentNewsController;
 use App\Http\Controllers\Finance\InvestmentNoteController;
 use App\Http\Controllers\Finance\InvestmentPositionController;
+use App\Http\Controllers\Finance\InvestmentReviewController;
 use App\Http\Controllers\Finance\MarketController;
 use App\Http\Controllers\Finance\TransactionController;
 use App\Http\Controllers\Finance\TransactionImportController;
@@ -23,6 +27,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('investments/positions/{isin}/notes', [InvestmentNoteController::class, 'store'])->name('investments.notes.store');
     Route::delete('investments/notes/{note}', [InvestmentNoteController::class, 'destroy'])->name('investments.notes.destroy');
     Route::post('investments/positions/{isin}/news/refresh', [InvestmentNewsController::class, 'refresh'])->name('investments.news.refresh');
+
+    Route::post('investments/positions/{isin}/decision', [InvestmentDecisionController::class, 'store'])->name('investments.decision.store');
+    Route::patch('investments/decisions/{investment}', [InvestmentDecisionController::class, 'update'])->name('investments.decision.update');
+    Route::post('investments/decisions/{investment}/link-analysis', [InvestmentDecisionController::class, 'linkAnalysis'])->name('investments.decision.link-analysis');
+    Route::post('investments/decisions/{investment}/reviews', [InvestmentReviewController::class, 'store'])->name('investments.reviews.store');
+    Route::delete('investments/reviews/{review}', [InvestmentReviewController::class, 'destroy'])->name('investments.reviews.destroy');
+    Route::post('investments/decisions/{investment}/journal', [InvestmentJournalEntryController::class, 'store'])->name('investments.journal.store');
+    Route::delete('investments/journal/{journalEntry}', [InvestmentJournalEntryController::class, 'destroy'])->name('investments.journal.destroy');
+    Route::post('investments/decisions/{investment}/events', [InvestmentEventController::class, 'store'])->name('investments.events.store');
+    Route::delete('investments/events/{event}', [InvestmentEventController::class, 'destroy'])->name('investments.events.destroy');
 
     Route::get('market', [MarketController::class, 'index'])->name('market.index');
 

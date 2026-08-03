@@ -321,6 +321,92 @@ export type MarketInstrument = {
     analysis: MarketAnalysis;
 };
 
+export type CompanyAnalysisOption = {
+    id: number;
+    name: string;
+    symbol: string;
+};
+
+export type InvestmentMotivationOption = {
+    key: string;
+    label: string;
+};
+
+export type InvestmentTimeHorizon = 'short' | 'medium' | 'long';
+
+export type InvestmentReviewDecision = 'hold' | 'increase' | 'reduce' | 'sell' | 'watch';
+
+export type InvestmentReview = {
+    id: number;
+    investment_event_id: number | null;
+    investment_event_title: string | null;
+    review_date: string;
+    decision: InvestmentReviewDecision;
+    thesis_still_valid: boolean | null;
+    score_before: number | null;
+    score_after: number | null;
+    note: string | null;
+};
+
+export type InvestmentEventType =
+    | 'earnings_quarterly'
+    | 'earnings_annual'
+    | 'guidance'
+    | 'investor_day'
+    | 'acquisition'
+    | 'management_change'
+    | 'regulatory'
+    | 'other';
+
+export type InvestmentEventMetric = {
+    label: string;
+    value: string;
+};
+
+export type InvestmentEvent = {
+    id: number;
+    event_type: InvestmentEventType;
+    title: string;
+    event_date: string;
+    metrics: InvestmentEventMetric[];
+    summary: string | null;
+};
+
+export type InvestmentDecision = {
+    id: number;
+    company_analysis_id: number | null;
+    motivation_reasons: string[];
+    motivation_note: string | null;
+    thesis: string | null;
+    sell_conditions: string | null;
+    time_horizon: InvestmentTimeHorizon | null;
+    initial_confidence: number | null;
+    current_confidence: number | null;
+    next_review_date: string | null;
+    next_review_note: string | null;
+    created_at: string;
+    updated_at: string;
+    reviews: InvestmentReview[];
+    events: InvestmentEvent[];
+};
+
+export type JournalEventType = 'buy' | 'increase' | 'reduce' | 'sell' | 'dividend' | 'note' | 'review';
+
+export type JournalEvent = {
+    type: JournalEventType;
+    date: string;
+    description: string | null;
+    amount: number | null;
+    quantity: number | null;
+    transaction_id: number | null;
+    journal_entry_id?: number;
+    review_id?: number;
+    decision?: InvestmentReviewDecision;
+    score_before?: number | null;
+    score_after?: number | null;
+    notes: string[];
+};
+
 export type InvestmentTab = {
     id: string;
     name: string;

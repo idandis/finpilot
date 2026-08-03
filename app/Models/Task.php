@@ -17,8 +17,8 @@ use Illuminate\Support\Carbon;
  * @property string $status
  * @property Carbon $task_date
  * @property string|null $scheduled_time HH:MM:SS - set only when the task has been given a
- *     specific time slot on the calendar (see CalendarController); the Task board itself
- *     ignores it, tasks are still grouped purely by task_date there.
+ *                                       specific time slot on the calendar (see CalendarController); the Task board itself
+ *                                       ignores it, tasks are still grouped purely by task_date there.
  * @property int $position
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at

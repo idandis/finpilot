@@ -207,9 +207,9 @@ class CardController extends Controller
      * given month.
      *
      * @param  Collection<int, Transaction>  $transactions
-     * @return \Illuminate\Support\Collection<int, array{category_id: int|null, name: string, color: string|null, amount: float}>
+     * @return SupportCollection<int, array{category_id: int|null, name: string, color: string|null, amount: float}>
      */
-    private function categoryBreakdown(Collection $transactions, string $direction): \Illuminate\Support\Collection
+    private function categoryBreakdown(Collection $transactions, string $direction): SupportCollection
     {
         return $transactions
             ->where('direction', $direction)

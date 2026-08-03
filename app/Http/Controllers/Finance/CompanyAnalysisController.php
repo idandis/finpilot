@@ -9,11 +9,10 @@ use App\Http\Requests\Finance\CompanyAnalysisUpdateRequest;
 use App\Models\CompanyAnalysis;
 use App\Models\CompanyAnalysisPriceHistory;
 use App\Services\Finance\BuffettQuestions;
+use App\Services\Finance\CompanyAnalysisPresenter;
 use App\Services\Finance\CompanyAnalysisPriceHistoryRepository;
 use App\Services\Finance\FmpIndicatorMapper;
-use App\Services\Finance\IndicatorScorer;
 use App\Services\Finance\TechnicalIndicators;
-use App\Services\Finance\ValuationAssessor;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -177,66 +176,11 @@ class CompanyAnalysisController extends Controller
     }
 
     /**
-     * Eloquent's decimal cast returns a string (to avoid float precision
-     * loss on save) - converted to a plain float here so the frontend
-     * always receives real JSON numbers, matching how every other
-     * indicator/price value already reaches the frontend in this app.
-     *
      * @return array<string, mixed>
      */
     private function present(CompanyAnalysis $analysis): array
     {
-        $indicators = [
-            'revenue_growth' => $this->toFloat($analysis->revenue_growth),
-            'eps_growth' => $this->toFloat($analysis->eps_growth),
-            'revenue_cagr_5y' => $this->toFloat($analysis->revenue_cagr_5y),
-            'eps_cagr_5y' => $this->toFloat($analysis->eps_cagr_5y),
-            'operating_margin' => $this->toFloat($analysis->operating_margin),
-            'net_margin' => $this->toFloat($analysis->net_margin),
-            'gross_margin' => $this->toFloat($analysis->gross_margin),
-            'roe' => $this->toFloat($analysis->roe),
-            'roic' => $this->toFloat($analysis->roic),
-            'debt_to_ebitda' => $this->toFloat($analysis->debt_to_ebitda),
-            'interest_coverage' => $this->toFloat($analysis->interest_coverage),
-            'current_ratio' => $this->toFloat($analysis->current_ratio),
-            'pe_ratio' => $this->toFloat($analysis->pe_ratio),
-            'ev_to_ebitda' => $this->toFloat($analysis->ev_to_ebitda),
-            'ev_to_fcf' => $this->toFloat($analysis->ev_to_fcf),
-            'price_to_sales' => $this->toFloat($analysis->price_to_sales),
-            'peg_ratio' => $this->toFloat($analysis->peg_ratio),
-            'fcf_yield' => $this->toFloat($analysis->fcf_yield),
-            'fcf_margin' => $this->toFloat($analysis->fcf_margin),
-        ];
-
-        $currentPrice = $this->toFloat($analysis->current_price);
-        $fairValue = $this->toFloat($analysis->fair_value);
-
-        return [
-            'id' => $analysis->id,
-            'name' => $analysis->name,
-            'symbol' => $analysis->symbol,
-            'current_price' => $currentPrice,
-            'market_cap' => $this->toFloat($analysis->market_cap),
-            ...$indicators,
-            'free_cash_flow' => $this->toFloat($analysis->free_cash_flow),
-            'fair_value' => $fairValue,
-            'historical_comparison' => $analysis->historical_comparison,
-            'competitor_comparison' => $analysis->competitor_comparison,
-            'indicators_currency' => $analysis->indicators_currency,
-            'indicators_fetched_at' => $analysis->indicators_fetched_at?->toIso8601String(),
-            'price_history_fetched_at' => $analysis->price_history_fetched_at?->toIso8601String(),
-            'created_at' => $analysis->created_at?->toIso8601String(),
-            'updated_at' => $analysis->updated_at?->toIso8601String(),
-            'scores' => collect($indicators)
-                ->map(fn (?float $value, string $indicator) => IndicatorScorer::score($indicator, $value))
-                ->all(),
-            'valuation' => ValuationAssessor::assess($currentPrice, $fairValue),
-        ];
-    }
-
-    private function toFloat(?string $value): ?float
-    {
-        return $value === null ? null : (float) $value;
+        return CompanyAnalysisPresenter::present($analysis);
     }
 
     /**

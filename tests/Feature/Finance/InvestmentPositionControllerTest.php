@@ -3,10 +3,14 @@
 namespace Tests\Feature\Finance;
 
 use App\Models\Card;
+use App\Models\CompanyAnalysis;
 use App\Models\FinancialAccount;
 use App\Models\InstrumentNews;
 use App\Models\InstrumentPrice;
+use App\Models\Investment;
+use App\Models\InvestmentEvent;
 use App\Models\InvestmentNote;
+use App\Models\InvestmentReview;
 use App\Models\Transaction;
 use App\Models\TransactionCategory;
 use App\Models\User;
@@ -218,6 +222,92 @@ class InvestmentPositionControllerTest extends TestCase
         $response->assertInertia(fn ($page) => $page
             ->where('news.resolvable', false)
             ->has('news.articles', 0)
+        );
+    }
+
+    public function test_it_reports_no_investment_decision_when_none_was_created_yet()
+    {
+        $user = User::factory()->create();
+        $card = $this->investmentCard($user);
+        $investments = TransactionCategory::factory()->create(['user_id' => null, 'name' => 'Investimenti']);
+
+        Transaction::factory()->for($card->financialAccount, 'financialAccount')->create([
+            'card_id' => $card->id,
+            'transaction_category_id' => $investments->id,
+            'transaction_date' => '2026-01-12',
+            'description' => 'Buy trade IE00BK5BQT80 Vanguard FTSE All-World, quantity: 2.0',
+            'isin' => 'IE00BK5BQT80',
+            'quantity' => 2.0,
+            'direction' => 'expense',
+            'amount' => 200,
+        ]);
+
+        $response = $this->actingAs($user)->get(route('investments.positions.show', 'IE00BK5BQT80'));
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->where('investment', null)
+            ->where('fundamentals', null)
+            ->has('journal', 0)
+            ->has('motivationOptions')
+        );
+    }
+
+    public function test_it_includes_the_decision_journal_fundamentals_and_journal_timeline()
+    {
+        $user = User::factory()->create();
+        $card = $this->investmentCard($user);
+        $investments = TransactionCategory::factory()->create(['user_id' => null, 'name' => 'Investimenti']);
+
+        Transaction::factory()->for($card->financialAccount, 'financialAccount')->create([
+            'card_id' => $card->id,
+            'transaction_category_id' => $investments->id,
+            'transaction_date' => '2026-01-12',
+            'description' => 'Buy trade IE00BK5BQT80 Vanguard FTSE All-World, quantity: 2.0',
+            'isin' => 'IE00BK5BQT80',
+            'quantity' => 2.0,
+            'direction' => 'expense',
+            'amount' => 200,
+        ]);
+
+        $analysis = CompanyAnalysis::factory()->create(['user_id' => $user->id, 'symbol' => 'VWCE']);
+        $investment = Investment::factory()->create([
+            'user_id' => $user->id,
+            'isin' => 'IE00BK5BQT80',
+            'company_analysis_id' => $analysis->id,
+            'thesis' => 'ETF diversificato a basso costo.',
+            'next_review_date' => '2026-10-01',
+            'next_review_note' => 'Controllare i margini dopo la trimestrale Q3.',
+        ]);
+
+        $event = InvestmentEvent::factory()->create([
+            'investment_id' => $investment->id,
+            'title' => 'Q1 FY2027 — Risultati trimestrali',
+            'metrics' => [['label' => 'Ricavi', 'value' => '$65.6B (+18% YoY)']],
+        ]);
+        InvestmentReview::factory()->create([
+            'investment_id' => $investment->id,
+            'investment_event_id' => $event->id,
+            'review_date' => '2026-01-01',
+            'thesis_still_valid' => true,
+        ]);
+
+        $response = $this->actingAs($user)->get(route('investments.positions.show', 'IE00BK5BQT80'));
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->where('investment.id', $investment->id)
+            ->where('investment.thesis', 'ETF diversificato a basso costo.')
+            ->where('investment.next_review_date', '2026-10-01')
+            ->where('investment.next_review_note', 'Controllare i margini dopo la trimestrale Q3.')
+            ->where('fundamentals.symbol', 'VWCE')
+            ->has('journal', 2)
+            ->where('journal.0.type', 'buy')
+            ->has('investment.events', 1)
+            ->where('investment.events.0.title', 'Q1 FY2027 — Risultati trimestrali')
+            ->where('investment.events.0.metrics.0.label', 'Ricavi')
+            ->where('investment.reviews.0.investment_event_title', 'Q1 FY2027 — Risultati trimestrali')
+            ->where('investment.reviews.0.thesis_still_valid', true)
         );
     }
 }
