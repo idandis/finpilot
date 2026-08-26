@@ -6,9 +6,11 @@ use App\Contracts\FundamentalDataProvider;
 use App\Contracts\MarketPriceProvider;
 use App\Services\Ai\AiToolExecutor;
 use App\Services\Ai\OpenAiChatService;
+use App\Services\Finance\EcbMacroDataProvider;
 use App\Services\Finance\EodhdCallBudget;
 use App\Services\Finance\EodhdMarketPriceProvider;
 use App\Services\Finance\FmpFundamentalDataProvider;
+use App\Services\Finance\FredMacroDataProvider;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -34,6 +36,12 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(FundamentalDataProvider::class, fn () => new FmpFundamentalDataProvider(
             config('services.fmp.api_key'),
         ));
+
+        $this->app->bind(FredMacroDataProvider::class, fn () => new FredMacroDataProvider(
+            config('services.fred.api_key'),
+        ));
+
+        $this->app->bind(EcbMacroDataProvider::class, fn () => new EcbMacroDataProvider);
 
         $this->app->bind(OpenAiChatService::class, fn ($app) => new OpenAiChatService(
             config('services.openai.api_key'),

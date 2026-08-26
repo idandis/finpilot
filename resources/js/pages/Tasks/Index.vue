@@ -79,6 +79,8 @@ const columns = computed(() =>
 
 const draggingTaskId = ref<number | null>(null);
 const dragOverStatus = ref<TaskStatus | null>(null);
+const dragOverTaskId = ref<number | null>(null);
+const dragOverBefore = ref(true);
 
 function onDragStart(task: Task, event: DragEvent) {
     draggingTaskId.value = task.id;
@@ -92,6 +94,7 @@ function onDragStart(task: Task, event: DragEvent) {
 function onDragEnd() {
     draggingTaskId.value = null;
     dragOverStatus.value = null;
+    dragOverTaskId.value = null;
 }
 
 function onDragOver(status: TaskStatus, event: DragEvent) {
@@ -99,25 +102,85 @@ function onDragOver(status: TaskStatus, event: DragEvent) {
     dragOverStatus.value = status;
 }
 
+// Moves (or reorders) a task into `status` at `targetIndex`, counting only
+// the *other* tasks already in that column - used both for drops on the
+// column background (append at the end) and drops on a specific task card
+// (insert right before/after it).
+function moveTask(taskId: number, status: TaskStatus, targetIndex: number) {
+    const task = localTasks.find((candidate) => candidate.id === taskId);
+
+    if (!task) {
+        return;
+    }
+
+    const columnTasks = localTasks
+        .filter((candidate) => candidate.status === status && candidate.id !== taskId)
+        .sort((a, b) => a.position - b.position);
+
+    const insertIndex = Math.max(0, Math.min(targetIndex, columnTasks.length));
+    columnTasks.splice(insertIndex, 0, task);
+
+    task.status = status;
+    columnTasks.forEach((candidate, index) => {
+        candidate.position = index;
+    });
+
+    router.patch(
+        taskRoutes.move(taskId).url,
+        { status, position: insertIndex },
+        { preserveScroll: true, preserveState: true },
+    );
+}
+
 function onDrop(status: TaskStatus, event: DragEvent) {
     event.preventDefault();
     const taskId = draggingTaskId.value;
     dragOverStatus.value = null;
+    dragOverTaskId.value = null;
     draggingTaskId.value = null;
 
     if (taskId === null || isPast.value) {
         return;
     }
 
-    const task = localTasks.find((candidate) => candidate.id === taskId);
+    const columnLength = localTasks.filter((candidate) => candidate.status === status && candidate.id !== taskId).length;
 
-    if (!task || task.status === status) {
+    moveTask(taskId, status, columnLength);
+}
+
+function onTaskDragOver(task: Task, event: DragEvent) {
+    if (isPast.value) {
         return;
     }
 
-    task.status = status;
+    event.preventDefault();
+    event.stopPropagation();
+    dragOverStatus.value = task.status;
+    dragOverTaskId.value = task.id;
 
-    router.patch(taskRoutes.move(taskId).url, { status }, { preserveScroll: true, preserveState: true });
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    dragOverBefore.value = event.clientY < rect.top + rect.height / 2;
+}
+
+function onTaskDrop(task: Task, event: DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    const taskId = draggingTaskId.value;
+    const before = dragOverBefore.value;
+    dragOverStatus.value = null;
+    dragOverTaskId.value = null;
+    draggingTaskId.value = null;
+
+    if (taskId === null || isPast.value || taskId === task.id) {
+        return;
+    }
+
+    const columnTasks = localTasks
+        .filter((candidate) => candidate.status === task.status && candidate.id !== taskId)
+        .sort((a, b) => a.position - b.position);
+    const targetIndex = columnTasks.findIndex((candidate) => candidate.id === task.id);
+
+    moveTask(taskId, task.status, before ? targetIndex : targetIndex + 1);
 }
 
 function destroyTask(task: Task, event: Event) {
@@ -128,12 +191,20 @@ function destroyTask(task: Task, event: Event) {
     }
 }
 
-// Carries an unfinished (or any) task one day forward - the only action
-// allowed even on an otherwise read-only past day, so leftovers from
-// yesterday can be caught up into today without rewriting history.
-function rescheduleTask(task: Task, event: Event) {
+// Opens the "move to another day" dialog - the only action allowed even on
+// an otherwise read-only past day, so leftovers from yesterday can be
+// caught up without rewriting history. Defaults to tomorrow, but any day
+// from today onward can be picked instead.
+const reschedulingTask = ref<Task | null>(null);
+const isRescheduleTaskOpen = computed(() => reschedulingTask.value !== null);
+
+function openRescheduleDialog(task: Task, event: Event) {
     event.stopPropagation();
-    router.patch(taskRoutes.reschedule(task.id).url, {}, { preserveScroll: true });
+    reschedulingTask.value = task;
+}
+
+function closeRescheduleDialog() {
+    reschedulingTask.value = null;
 }
 
 const isAddTaskOpen = ref(false);
@@ -260,6 +331,36 @@ function closeEditTaskDialog() {
             </DialogContent>
         </Dialog>
 
+        <Dialog
+            :open="isRescheduleTaskOpen"
+            @update:open="
+                (open) => {
+                    if (!open) closeRescheduleDialog();
+                }
+            "
+        >
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Sposta task</DialogTitle>
+                </DialogHeader>
+                <Form
+                    v-if="reschedulingTask"
+                    :key="`reschedule-${reschedulingTask.id}`"
+                    v-bind="TaskController.reschedule.form(reschedulingTask.id)"
+                    class="grid grid-cols-1 gap-4"
+                    v-slot="{ errors, processing }"
+                    @success="closeRescheduleDialog"
+                >
+                    <div class="grid gap-2">
+                        <Label for="reschedule-date">Nuova data</Label>
+                        <Input id="reschedule-date" type="date" name="task_date" :min="today" :default-value="nextDate" required autofocus />
+                        <InputError :message="errors.task_date" />
+                    </div>
+                    <Button type="submit" :disabled="processing">Sposta task</Button>
+                </Form>
+            </DialogContent>
+        </Dialog>
+
         <div class="grid grid-cols-1 gap-4 md:grid-cols-3 md:flex-1 md:min-h-0">
             <div
                 v-for="column in columns"
@@ -282,17 +383,24 @@ function closeEditTaskDialog() {
                 <div
                     v-for="task in column.tasks"
                     :key="task.id"
-                    :draggable="isToday"
+                    :draggable="!isPast"
                     class="group flex items-start gap-2 rounded-md border bg-background p-3 shadow-sm"
                     :class="[
                         draggingTaskId === task.id ? 'opacity-40' : '',
                         isPast ? '' : 'cursor-pointer',
+                        dragOverTaskId === task.id && draggingTaskId !== task.id
+                            ? dragOverBefore
+                                ? 'border-t-2 border-t-primary'
+                                : 'border-b-2 border-b-primary'
+                            : '',
                     ]"
                     @dragstart="onDragStart(task, $event)"
                     @dragend="onDragEnd"
+                    @dragover="onTaskDragOver(task, $event)"
+                    @drop="onTaskDrop(task, $event)"
                     @click="openEditTaskDialog(task)"
                 >
-                    <GripVertical v-if="isToday" class="mt-0.5 size-4 shrink-0 cursor-grab text-muted-foreground" />
+                    <GripVertical v-if="!isPast" class="mt-0.5 size-4 shrink-0 cursor-grab text-muted-foreground" />
                     <div class="min-w-0 flex-1">
                         <p class="truncate text-sm font-medium">{{ task.title }}</p>
                         <p v-if="task.description" class="mt-1 line-clamp-3 text-xs whitespace-pre-line text-muted-foreground">
@@ -304,8 +412,8 @@ function closeEditTaskDialog() {
                             variant="ghost"
                             size="icon-sm"
                             class="text-muted-foreground hover:bg-muted"
-                            title="Sposta al giorno successivo"
-                            @click="rescheduleTask(task, $event)"
+                            title="Sposta ad un altro giorno"
+                            @click="openRescheduleDialog(task, $event)"
                         >
                             <ChevronsRight />
                         </Button>

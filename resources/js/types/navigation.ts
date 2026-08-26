@@ -12,4 +12,6 @@ export type NavItem = {
     icon?: LucideIcon;
     isActive?: boolean;
     items?: NavItem[];
+    /** Stable identifier used to remember which sidebar modules the user hid - see useSidebarModules(). Omit for items that can't be hidden. */
+    key?: string;
 };

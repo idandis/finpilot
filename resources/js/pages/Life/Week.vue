@@ -13,6 +13,7 @@ import {
 import { computed, ref } from 'vue';
 import MemoryController from '@/actions/App/Http/Controllers/MemoryController';
 import InputError from '@/components/InputError.vue';
+import RichTextEditor from '@/components/RichTextEditor.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,6 +24,12 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+} from '@/components/ui/sheet';
 import * as lifeRoutes from '@/routes/life';
 import * as memoryRoutes from '@/routes/memories';
 import type {
@@ -98,6 +105,20 @@ function moodLabel(mood: string | null) {
     return mood ? (props.moods[mood] ?? mood) : null;
 }
 
+// Descriptions are now saved as HTML from the rich text editor, but older
+// memories still hold plain text - escape those before rendering as HTML so
+// they display as-is instead of being misread as markup.
+function renderDescription(description: string): string {
+    if (/^\s*<(p|h[1-6]|ul|ol)[ >]/i.test(description)) {
+        return description;
+    }
+
+    const div = document.createElement('div');
+    div.textContent = description;
+
+    return div.innerHTML.replace(/\n/g, '<br>');
+}
+
 function destroyMemory(memory: Memory) {
     if (confirm(`Eliminare il ricordo "${memory.title}"?`)) {
         router.delete(memoryRoutes.destroy(memory.id).url, {
@@ -114,14 +135,18 @@ const memoryDialogTarget = ref<{ date: string; memory: Memory | null } | null>(
 const isMemoryDialogOpen = computed(() => memoryDialogTarget.value !== null);
 const editingMemory = computed(() => memoryDialogTarget.value?.memory ?? null);
 
+const descriptionForForm = ref('');
+
 function openCreateMemoryDialog(date: string) {
     memoryDialogTarget.value = { date, memory: null };
     selectedMoodForForm.value = null;
+    descriptionForForm.value = '';
 }
 
 function openEditMemoryDialog(date: string, memory: Memory) {
     memoryDialogTarget.value = { date, memory };
     selectedMoodForForm.value = memory.mood ?? null;
+    descriptionForForm.value = memory.description ?? '';
 }
 
 function closeMemoryDialog() {
@@ -304,12 +329,11 @@ function closePhotoModal() {
                                                 </Button>
                                             </div>
                                         </div>
-                                        <p
+                                        <div
                                             v-if="memory.description"
-                                            class="line-clamp-2 text-xs whitespace-pre-line text-muted-foreground"
-                                        >
-                                            {{ memory.description }}
-                                        </p>
+                                            class="prose prose-sm dark:prose-invert line-clamp-2 max-w-none text-xs text-muted-foreground [&_*]:my-0"
+                                            v-html="renderDescription(memory.description)"
+                                        />
                                         <div class="flex flex-wrap items-center gap-2">
                                             <Badge v-if="memory.mood" variant="secondary">
                                                 {{ moodLabel(memory.mood) }}
@@ -409,7 +433,7 @@ function closePhotoModal() {
             </div>
         </div>
 
-        <Dialog
+        <Sheet
             :open="isMemoryDialogOpen"
             @update:open="
                 (open) => {
@@ -417,12 +441,12 @@ function closePhotoModal() {
                 }
             "
         >
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle v-if="memoryDialogTarget" class="capitalize">{{
+            <SheetContent class="w-full gap-0 overflow-y-auto sm:max-w-lg">
+                <SheetHeader>
+                    <SheetTitle v-if="memoryDialogTarget" class="capitalize">{{
                         editingMemory ? 'Modifica ricordo' : dayLabel(memoryDialogTarget.date)
-                    }}</DialogTitle>
-                </DialogHeader>
+                    }}</SheetTitle>
+                </SheetHeader>
                 <Form
                     v-if="memoryDialogTarget"
                     :key="editingMemory ? `memory-${editingMemory.id}` : 'memory-new'"
@@ -432,7 +456,7 @@ function closePhotoModal() {
                             : MemoryController.store.form()
                     "
                     :reset-on-success="!editingMemory"
-                    class="grid grid-cols-1 gap-4"
+                    class="grid grid-cols-1 gap-4 px-4 pb-4"
                     v-slot="{ errors, processing }"
                     @success="closeMemoryDialog"
                 >
@@ -455,14 +479,12 @@ function closePhotoModal() {
                     </div>
                     <div class="grid gap-2">
                         <Label for="memory-description">Descrizione (opzionale)</Label>
-                        <textarea
+                        <input type="hidden" name="description" :value="descriptionForForm" />
+                        <RichTextEditor
                             id="memory-description"
-                            name="description"
-                            rows="3"
+                            v-model="descriptionForForm"
                             placeholder="Dettagli aggiuntivi..."
-                            class="w-full min-w-0 resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 md:text-sm dark:aria-invalid:ring-destructive/40"
-                            :value="editingMemory?.description ?? ''"
-                        ></textarea>
+                        />
                         <InputError :message="errors.description" />
                     </div>
                     <div class="grid grid-cols-2 gap-4">
@@ -550,8 +572,8 @@ function closePhotoModal() {
                         editingMemory ? 'Salva modifiche' : 'Aggiungi ricordo'
                     }}</Button>
                 </Form>
-            </DialogContent>
-        </Dialog>
+            </SheetContent>
+        </Sheet>
 
         <Dialog
             :open="photoModal !== null"

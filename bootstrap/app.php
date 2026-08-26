@@ -5,7 +5,6 @@ use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
-use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -17,10 +16,14 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
+        // NB: AddLinkHeadersForPreloadedAssets e' volutamente assente. Emetteva un
+        // header Link: con un preload per ogni chunk Vite (~90 voci, ~9 KB). Sulla
+        // pagina /login il blocco header superava il limite di 10 KB del proxy Aruba,
+        // che rispondeva 500 con body vuoto. Gli stessi tag <link rel="modulepreload">
+        // sono gia' presenti nell'HTML generato da @vite, quindi non si perde nulla.
         $middleware->web(append: [
             HandleAppearance::class,
             HandleInertiaRequests::class,
-            AddLinkHeadersForPreloadedAssets::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

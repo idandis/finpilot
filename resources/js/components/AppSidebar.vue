@@ -1,27 +1,7 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import {
-    CalendarDays,
-    ChartCandlestick,
-    ClipboardCheck,
-    CreditCard,
-    Dumbbell,
-    HeartPulse,
-    KanbanSquare,
-    KeyRound,
-    LayoutGrid,
-    LineChart,
-    ListChecks,
-    PiggyBank,
-    ShoppingCart,
-    Sparkles,
-    Sprout,
-    Tag,
-    Tags,
-    TrendingUp,
-    UtensilsCrossed,
-    Wallet,
-} from '@lucide/vue';
+import { LayoutGrid, Sparkles } from '@lucide/vue';
+import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
@@ -35,22 +15,10 @@ import {
     SidebarMenuItem,
     SidebarSeparator,
 } from '@/components/ui/sidebar';
+import { useSidebarModules } from '@/composables/useSidebarModules';
+import { mainNavItems as configurableNavItems } from '@/lib/sidebar-nav';
 import { dashboard } from '@/routes';
 import * as aiChat from '@/routes/ai-chat';
-import * as budgets from '@/routes/budgets';
-import * as calendar from '@/routes/calendar';
-import * as cards from '@/routes/cards';
-import * as categories from '@/routes/categories';
-import * as categoryRules from '@/routes/category-rules';
-import * as companyAnalyses from '@/routes/company-analyses';
-import * as investments from '@/routes/investments';
-import * as life from '@/routes/life';
-import * as market from '@/routes/market';
-import * as meals from '@/routes/meals';
-import * as passwords from '@/routes/passwords';
-import * as shoppingLists from '@/routes/shopping-lists';
-import * as tasks from '@/routes/tasks';
-import * as workouts from '@/routes/workouts';
 import type { NavItem } from '@/types';
 
 const aiNavItems: NavItem[] = [
@@ -67,101 +35,30 @@ const mainNavItems: NavItem[] = [
         href: dashboard(),
         icon: LayoutGrid,
     },
-    {
-        title: 'Finanza',
-        icon: Wallet,
-        items: [
-            {
-                title: 'Categorie',
-                href: categories.index(),
-                icon: Tag,
-            },
-            {
-                title: 'Regole categorie',
-                href: categoryRules.index(),
-                icon: Tags,
-            },
-            {
-                title: 'Carte',
-                href: cards.index(),
-                icon: CreditCard,
-            },
-            {
-                title: 'Budget',
-                href: budgets.index(),
-                icon: PiggyBank,
-            },
-        ],
-    },
-    {
-        title: 'Investimenti',
-        icon: LineChart,
-        items: [
-            {
-                title: 'Investimenti personali',
-                href: investments.index(),
-                icon: TrendingUp,
-            },
-            {
-                title: 'Mercato',
-                href: market.index(),
-                icon: ChartCandlestick,
-            },
-            {
-                title: 'Analisi aziendale',
-                href: companyAnalyses.index(),
-                icon: ClipboardCheck,
-            },
-        ],
-    },
-    {
-        title: 'Produttività',
-        icon: ListChecks,
-        items: [
-            {
-                title: 'Task',
-                href: tasks.index(),
-                icon: KanbanSquare,
-            },
-            {
-                title: 'Calendario',
-                href: calendar.index(),
-                icon: CalendarDays,
-            },
-            {
-                title: 'Password',
-                href: passwords.index(),
-                icon: KeyRound,
-            },
-        ],
-    },
-    {
-        title: 'Vita',
-        icon: HeartPulse,
-        items: [
-            {
-                title: 'Pasti',
-                href: meals.index(),
-                icon: UtensilsCrossed,
-            },
-            {
-                title: 'Lista della spesa',
-                href: shoppingLists.index(),
-                icon: ShoppingCart,
-            },
-            {
-                title: 'Allenamenti',
-                href: workouts.index(),
-                icon: Dumbbell,
-            },
-            {
-                title: 'Vita',
-                href: life.index(),
-                icon: Sprout,
-            },
-        ],
-    },
+    ...configurableNavItems,
 ];
+
+const { isModuleHidden } = useSidebarModules();
+
+// Groups (and their sub-items) the user turned off in Impostazioni ›
+// Sidebar don't render at all - a group left with zero visible children
+// after filtering is dropped too, since NavMain can't render an empty
+// collapsible.
+const visibleNavItems = computed<NavItem[]>(() =>
+    mainNavItems
+        .filter((item) => !isModuleHidden(item.key))
+        .map((item) =>
+            item.items
+                ? {
+                      ...item,
+                      items: item.items.filter(
+                          (sub) => !isModuleHidden(sub.key),
+                      ),
+                  }
+                : item,
+        )
+        .filter((item) => !item.items || item.items.length > 0),
+);
 </script>
 
 <template>
@@ -181,7 +78,7 @@ const mainNavItems: NavItem[] = [
         <SidebarContent>
             <NavMain :items="aiNavItems" label="Assistente" />
             <SidebarSeparator />
-            <NavMain :items="mainNavItems" label="Menu" />
+            <NavMain :items="visibleNavItems" label="Menu" />
         </SidebarContent>
 
         <SidebarFooter>

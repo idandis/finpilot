@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
 import { ArrowDown, ArrowUp, MessageSquarePlus, Sparkles } from '@lucide/vue';
+import katex from 'katex';
 import { nextTick, reactive, ref } from 'vue';
 import { toast } from 'vue-sonner';
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
 import * as aiChatRoutes from '@/routes/ai-chat';
+import 'katex/dist/katex.min.css';
 
 type ChatMessage = {
     role: 'user' | 'assistant';
@@ -40,15 +42,37 @@ function startNewChat() {
 function escapeHtml(text: string): string {
     const div = document.createElement('div');
     div.textContent = text;
+
     return div.innerHTML;
 }
 
+function renderLatex(expression: string, displayMode: boolean): string {
+    try {
+        return katex.renderToString(expression.trim(), { throwOnError: false, displayMode });
+    } catch {
+        return escapeHtml(expression);
+    }
+}
+
 function renderMarkdown(content: string): string {
-    let html = escapeHtml(content);
-    // Handle LaTeX equations first (block and inline)
-    html = html.replace(/\\\[([\s\S]*?)\\\]/g, '<div class="my-3 bg-muted/30 p-3 rounded overflow-x-auto text-center font-mono text-sm">\\[$1\\]</div>');
-    html = html.replace(/\$\$([\s\S]*?)\$\$/g, '<div class="my-3 bg-muted/30 p-3 rounded overflow-x-auto text-center font-mono text-sm">$$\$1$$</div>');
-    html = html.replace(/\$([^\$\n]+?)\$/g, '<code class="bg-muted/50 px-1.5 py-0.5 rounded text-sm">$1</code>');
+    // Extract and render LaTeX equations first, from the raw (unescaped)
+    // content, and swap them for placeholder tokens so the markdown/HTML
+    // escaping steps below don't mangle KaTeX's generated markup.
+    const mathHtml: string[] = [];
+    function storeMath(html: string): string {
+        const token = `KATEX${mathHtml.length}`;
+        mathHtml.push(html);
+
+        return token;
+    }
+
+    let raw = content;
+    raw = raw.replace(/\\\[([\s\S]*?)\\\]/g, (_m, expr) => storeMath(`<div class="my-3 overflow-x-auto">${renderLatex(expr, true)}</div>`));
+    raw = raw.replace(/\$\$([\s\S]*?)\$\$/g, (_m, expr) => storeMath(`<div class="my-3 overflow-x-auto">${renderLatex(expr, true)}</div>`));
+    raw = raw.replace(/\\\(([\s\S]*?)\\\)/g, (_m, expr) => storeMath(renderLatex(expr, false)));
+    raw = raw.replace(/\$([^$\n]+?)\$/g, (_m, expr) => storeMath(renderLatex(expr, false)));
+
+    let html = escapeHtml(raw);
     // Handle headings
     html = html.replace(/^### (.*?)$/gm, '<h3 class="font-semibold text-base mt-2 mb-1">$1</h3>');
     html = html.replace(/^## (.*?)$/gm, '<h2 class="font-bold text-lg mt-3 mb-2">$1</h2>');
@@ -62,6 +86,9 @@ function renderMarkdown(content: string): string {
     html = html.replace(/`([^\$]*?)`/g, '<code class="bg-muted/50 px-1.5 py-0.5 rounded text-sm">$1</code>');
     // Handle line breaks last
     html = html.replace(/\n/g, '<br/>');
+    // Swap the rendered KaTeX markup back in
+    html = html.replace(/KATEX(\d+)/g, (_m, index) => mathHtml[Number(index)]);
+
     return html;
 }
 
@@ -186,7 +213,7 @@ async function send(text?: string) {
         </div>
 
         <form
-            class="fixed bottom-20 left-1/2 z-20 w-full max-w-[calc(48rem-2rem)] -translate-x-1/2 flex items-center gap-2 rounded-full border bg-background/95 p-1.5 shadow-lg backdrop-blur-md md:sticky md:bottom-0"
+            class="fixed inset-x-4 bottom-20 z-20 flex w-auto max-w-[calc(48rem-2rem)] items-center gap-2 rounded-full border bg-background/95 p-1.5 shadow-lg backdrop-blur-md md:sticky md:inset-x-auto md:bottom-0 md:w-full md:max-w-none"
             @submit.prevent="send()"
         >
             <input

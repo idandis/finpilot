@@ -5,6 +5,7 @@ import {
     CreditCard,
     Dumbbell,
     KanbanSquare,
+    KeyRound,
     PiggyBank,
     ShoppingCart,
     Sprout,
@@ -17,6 +18,7 @@ import * as cardRoutes from '@/routes/cards';
 import * as investmentRoutes from '@/routes/investments';
 import * as lifeRoutes from '@/routes/life';
 import * as mealRoutes from '@/routes/meals';
+import * as passwordRoutes from '@/routes/passwords';
 import * as shoppingListRoutes from '@/routes/shopping-lists';
 import * as taskRoutes from '@/routes/tasks';
 import * as workoutRoutes from '@/routes/workouts';
@@ -62,6 +64,11 @@ const actions = [
         title: 'Carte di credito',
         href: cardRoutes.index(),
         icon: CreditCard,
+    },
+    {
+        title: 'Nuova password',
+        href: passwordRoutes.index(),
+        icon: KeyRound,
     },
 ];
 </script>

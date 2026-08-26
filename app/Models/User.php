@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -183,5 +184,45 @@ class User extends Authenticatable implements PasskeyUser
     public function events(): HasMany
     {
         return $this->hasMany(Event::class);
+    }
+
+    /**
+     * @return HasOne<BalanceSheetProfile, $this>
+     */
+    public function balanceSheetProfile(): HasOne
+    {
+        return $this->hasOne(BalanceSheetProfile::class);
+    }
+
+    /**
+     * @return HasMany<BalanceSheetEntry, $this>
+     */
+    public function balanceSheetEntries(): HasMany
+    {
+        return $this->hasMany(BalanceSheetEntry::class);
+    }
+
+    /**
+     * @return HasMany<BalanceSheetMonthClosure, $this>
+     */
+    public function balanceSheetMonthClosures(): HasMany
+    {
+        return $this->hasMany(BalanceSheetMonthClosure::class);
+    }
+
+    /**
+     * @return HasMany<BudgetCategory, $this>
+     */
+    public function budgetCategories(): HasMany
+    {
+        return $this->hasMany(BudgetCategory::class);
+    }
+
+    /**
+     * @return HasMany<MonthlyBudget, $this>
+     */
+    public function monthlyBudgets(): HasMany
+    {
+        return $this->hasMany(MonthlyBudget::class);
     }
 }

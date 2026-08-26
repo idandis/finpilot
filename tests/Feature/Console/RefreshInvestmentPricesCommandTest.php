@@ -63,8 +63,12 @@ class RefreshInvestmentPricesCommandTest extends TestCase
 
         $this->assertDatabaseCount('instrument_prices', 2);
         // Budget is fully spent by the loops above - the history backfill
-        // step must not sneak in any extra call.
-        $this->assertDatabaseCount('instrument_price_history', 0);
+        // step must not sneak in any extra call. Exactly one row exists
+        // here regardless, for whichever single ISIN actually got its close
+        // fetched above - appended at no extra API cost alongside its price
+        // refresh (see InstrumentPriceHistoryRepository::upsertLatest()).
+        $this->assertDatabaseCount('instrument_price_history', 1);
+        $this->assertDatabaseHas('instrument_price_history', ['close_price' => 100.0]);
     }
 
     public function test_it_also_refreshes_the_exchange_rate_for_a_known_non_eur_currency()
@@ -136,7 +140,9 @@ class RefreshInvestmentPricesCommandTest extends TestCase
         // calls: the shared daily budget is already spent.
         $this->artisan('investments:refresh-prices', ['--budget' => 18])->assertSuccessful();
         Http::assertSentCount(3);
-        $this->assertDatabaseCount('instrument_price_history', 0);
+        // Still just the one row from the first run's single successful
+        // close fetch - the second run made no further calls.
+        $this->assertDatabaseCount('instrument_price_history', 1);
     }
 
     public function test_force_option_refreshes_a_fresh_price_and_rate_anyway()

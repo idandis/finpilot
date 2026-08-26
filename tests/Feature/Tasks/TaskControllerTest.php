@@ -175,7 +175,7 @@ class TaskControllerTest extends TestCase
         $user = User::factory()->create();
         $task = Task::factory()->create(['user_id' => $user->id, 'task_date' => today(), 'status' => 'todo']);
 
-        $response = $this->actingAs($user)->patch(route('tasks.move', $task), ['status' => 'in_progress']);
+        $response = $this->actingAs($user)->patch(route('tasks.move', $task), ['status' => 'in_progress', 'position' => 0]);
 
         $response->assertRedirect();
         $this->assertDatabaseHas('tasks', ['id' => $task->id, 'status' => 'in_progress']);
@@ -188,9 +188,37 @@ class TaskControllerTest extends TestCase
         Task::factory()->create(['user_id' => $user->id, 'task_date' => today(), 'status' => 'done', 'position' => 1]);
         $task = Task::factory()->create(['user_id' => $user->id, 'task_date' => today(), 'status' => 'todo', 'position' => 0]);
 
-        $this->actingAs($user)->patch(route('tasks.move', $task), ['status' => 'done']);
+        $this->actingAs($user)->patch(route('tasks.move', $task), ['status' => 'done', 'position' => 2]);
 
         $this->assertDatabaseHas('tasks', ['id' => $task->id, 'status' => 'done', 'position' => 2]);
+    }
+
+    public function test_moving_a_task_can_insert_it_in_the_middle_of_the_target_column()
+    {
+        $user = User::factory()->create();
+        $first = Task::factory()->create(['user_id' => $user->id, 'task_date' => today(), 'status' => 'done', 'position' => 0]);
+        $second = Task::factory()->create(['user_id' => $user->id, 'task_date' => today(), 'status' => 'done', 'position' => 1]);
+        $task = Task::factory()->create(['user_id' => $user->id, 'task_date' => today(), 'status' => 'todo', 'position' => 0]);
+
+        $this->actingAs($user)->patch(route('tasks.move', $task), ['status' => 'done', 'position' => 1]);
+
+        $this->assertDatabaseHas('tasks', ['id' => $first->id, 'status' => 'done', 'position' => 0]);
+        $this->assertDatabaseHas('tasks', ['id' => $task->id, 'status' => 'done', 'position' => 1]);
+        $this->assertDatabaseHas('tasks', ['id' => $second->id, 'status' => 'done', 'position' => 2]);
+    }
+
+    public function test_a_task_can_be_reordered_within_its_own_column()
+    {
+        $user = User::factory()->create();
+        $first = Task::factory()->create(['user_id' => $user->id, 'task_date' => today(), 'status' => 'todo', 'position' => 0]);
+        $second = Task::factory()->create(['user_id' => $user->id, 'task_date' => today(), 'status' => 'todo', 'position' => 1]);
+        $third = Task::factory()->create(['user_id' => $user->id, 'task_date' => today(), 'status' => 'todo', 'position' => 2]);
+
+        $this->actingAs($user)->patch(route('tasks.move', $first), ['status' => 'todo', 'position' => 2]);
+
+        $this->assertDatabaseHas('tasks', ['id' => $second->id, 'position' => 0]);
+        $this->assertDatabaseHas('tasks', ['id' => $third->id, 'position' => 1]);
+        $this->assertDatabaseHas('tasks', ['id' => $first->id, 'position' => 2]);
     }
 
     public function test_moving_requires_a_valid_status()
@@ -198,9 +226,19 @@ class TaskControllerTest extends TestCase
         $user = User::factory()->create();
         $task = Task::factory()->create(['user_id' => $user->id, 'task_date' => today()]);
 
-        $response = $this->actingAs($user)->patch(route('tasks.move', $task), ['status' => 'archived']);
+        $response = $this->actingAs($user)->patch(route('tasks.move', $task), ['status' => 'archived', 'position' => 0]);
 
         $response->assertSessionHasErrors('status');
+    }
+
+    public function test_moving_requires_a_position()
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => $user->id, 'task_date' => today()]);
+
+        $response = $this->actingAs($user)->patch(route('tasks.move', $task), ['status' => 'todo']);
+
+        $response->assertSessionHasErrors('position');
     }
 
     public function test_a_user_cannot_move_another_users_task()
@@ -208,7 +246,7 @@ class TaskControllerTest extends TestCase
         $user = User::factory()->create();
         $task = Task::factory()->create(['user_id' => User::factory(), 'task_date' => today(), 'status' => 'todo']);
 
-        $response = $this->actingAs($user)->patch(route('tasks.move', $task), ['status' => 'done']);
+        $response = $this->actingAs($user)->patch(route('tasks.move', $task), ['status' => 'done', 'position' => 0]);
 
         $response->assertForbidden();
         $this->assertDatabaseHas('tasks', ['id' => $task->id, 'status' => 'todo']);
@@ -219,7 +257,7 @@ class TaskControllerTest extends TestCase
         $user = User::factory()->create();
         $task = Task::factory()->create(['user_id' => $user->id, 'task_date' => today()->addDay(), 'status' => 'todo']);
 
-        $response = $this->actingAs($user)->patch(route('tasks.move', $task), ['status' => 'in_progress']);
+        $response = $this->actingAs($user)->patch(route('tasks.move', $task), ['status' => 'in_progress', 'position' => 0]);
 
         $response->assertRedirect();
         $this->assertDatabaseHas('tasks', ['id' => $task->id, 'status' => 'in_progress']);
@@ -230,7 +268,7 @@ class TaskControllerTest extends TestCase
         $user = User::factory()->create();
         $task = Task::factory()->create(['user_id' => $user->id, 'task_date' => today()->subDay(), 'status' => 'todo']);
 
-        $response = $this->actingAs($user)->patch(route('tasks.move', $task), ['status' => 'done']);
+        $response = $this->actingAs($user)->patch(route('tasks.move', $task), ['status' => 'done', 'position' => 0]);
 
         $response->assertForbidden();
         $this->assertDatabaseHas('tasks', ['id' => $task->id, 'status' => 'todo']);
@@ -358,10 +396,26 @@ class TaskControllerTest extends TestCase
         $user = User::factory()->create();
         $task = Task::factory()->create(['user_id' => $user->id, 'task_date' => today()->subDay(), 'status' => 'todo']);
 
-        $response = $this->actingAs($user)->patch(route('tasks.reschedule', $task));
+        $response = $this->actingAs($user)->patch(route('tasks.reschedule', $task), [
+            'task_date' => today()->toDateString(),
+        ]);
 
         $response->assertRedirect();
         $this->assertDatabaseHas('tasks', ['id' => $task->id, 'task_date' => today()->toDateString().' 00:00:00']);
+    }
+
+    public function test_a_user_can_reschedule_a_task_to_an_arbitrary_future_day()
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => $user->id, 'task_date' => today(), 'status' => 'todo']);
+        $targetDate = today()->addWeek();
+
+        $response = $this->actingAs($user)->patch(route('tasks.reschedule', $task), [
+            'task_date' => $targetDate->toDateString(),
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('tasks', ['id' => $task->id, 'task_date' => $targetDate->toDateString().' 00:00:00']);
     }
 
     public function test_rescheduling_appends_to_the_end_of_the_target_days_column()
@@ -370,9 +424,34 @@ class TaskControllerTest extends TestCase
         Task::factory()->create(['user_id' => $user->id, 'task_date' => today(), 'status' => 'todo', 'position' => 0]);
         $task = Task::factory()->create(['user_id' => $user->id, 'task_date' => today()->subDay(), 'status' => 'todo', 'position' => 0]);
 
-        $this->actingAs($user)->patch(route('tasks.reschedule', $task));
+        $this->actingAs($user)->patch(route('tasks.reschedule', $task), [
+            'task_date' => today()->toDateString(),
+        ]);
 
         $this->assertDatabaseHas('tasks', ['id' => $task->id, 'position' => 1]);
+    }
+
+    public function test_rescheduling_requires_a_date()
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => $user->id, 'task_date' => today(), 'status' => 'todo']);
+
+        $response = $this->actingAs($user)->patch(route('tasks.reschedule', $task));
+
+        $response->assertSessionHasErrors('task_date');
+    }
+
+    public function test_rescheduling_into_the_past_is_rejected()
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => $user->id, 'task_date' => today(), 'status' => 'todo']);
+
+        $response = $this->actingAs($user)->patch(route('tasks.reschedule', $task), [
+            'task_date' => today()->subDay()->toDateString(),
+        ]);
+
+        $response->assertSessionHasErrors('task_date');
+        $this->assertDatabaseHas('tasks', ['id' => $task->id, 'task_date' => today()->toDateString().' 00:00:00']);
     }
 
     public function test_a_user_cannot_reschedule_another_users_task()

@@ -142,7 +142,7 @@ export function initializeAccentColor(): void {
     }
 
     const saved = localStorage.getItem('accent-color') as AccentColor | null;
-    updateAccentColorDom(saved || 'default');
+    updateAccentColorDom(saved || 'purple');
 }
 
 export function initializeFont(): void {
@@ -155,7 +155,7 @@ export function initializeFont(): void {
 }
 
 const appearance = ref<Appearance>('system');
-const accentColor = ref<AccentColor>('default');
+const accentColor = ref<AccentColor>('purple');
 const fontFamily = ref<FontChoice>('sans');
 
 export function useAppearance(): UseAppearanceReturn {

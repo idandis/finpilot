@@ -2,6 +2,7 @@
 
 namespace App\Services\Finance;
 
+use App\Contracts\FetchedPrice;
 use App\Contracts\MarketPriceProvider;
 use App\Models\InstrumentPrice;
 use App\Models\InstrumentPriceHistory;
@@ -66,6 +67,39 @@ class InstrumentPriceHistoryRepository
         $record->update(['history_backfilled_at' => now()]);
 
         return 1;
+    }
+
+    /**
+     * Appends (or corrects) a single day's close onto an ISIN's history,
+     * using a price InstrumentPriceRepository::refresh() already fetched -
+     * no extra API call. backfill() above only ever runs once per ISIN, so
+     * without this the portfolio value chart would freeze at that one-time
+     * snapshot forever; every subsequent close-price refresh (scheduled or
+     * the manual "Aggiorna chiusura" button) now keeps it moving forward
+     * too. Matches on calendar day the same way backfill() does, since a
+     * forced re-fetch of today's close must update the existing row rather
+     * than collide with the unique index.
+     */
+    public function upsertLatest(string $isin, FetchedPrice $price): void
+    {
+        $dateKey = $price->date->format('Y-m-d');
+
+        $existing = InstrumentPriceHistory::query()
+            ->where('isin', $isin)
+            ->whereDate('price_date', $dateKey)
+            ->first();
+
+        if ($existing !== null) {
+            $existing->update(['close_price' => $price->price]);
+
+            return;
+        }
+
+        InstrumentPriceHistory::query()->create([
+            'isin' => $isin,
+            'price_date' => $dateKey,
+            'close_price' => $price->price,
+        ]);
     }
 
     /**

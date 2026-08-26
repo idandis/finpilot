@@ -14,6 +14,7 @@ use App\Http\Controllers\Finance\InvestmentNewsController;
 use App\Http\Controllers\Finance\InvestmentNoteController;
 use App\Http\Controllers\Finance\InvestmentPositionController;
 use App\Http\Controllers\Finance\InvestmentReviewController;
+use App\Http\Controllers\Finance\MacroController;
 use App\Http\Controllers\Finance\MarketController;
 use App\Http\Controllers\Finance\TransactionController;
 use App\Http\Controllers\Finance\TransactionImportController;
@@ -39,6 +40,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('investments/events/{event}', [InvestmentEventController::class, 'destroy'])->name('investments.events.destroy');
 
     Route::get('market', [MarketController::class, 'index'])->name('market.index');
+    Route::get('macro', [MacroController::class, 'index'])->name('macro.index');
+    Route::post('macro/refresh', [MacroController::class, 'refresh'])->name('macro.refresh');
+    Route::post('macro/markets/refresh', [MacroController::class, 'refreshMarkets'])->name('macro.markets.refresh');
 
     Route::get('company-analyses', [CompanyAnalysisController::class, 'index'])->name('company-analyses.index');
     Route::get('company-analyses/create', [CompanyAnalysisController::class, 'create'])->name('company-analyses.create');

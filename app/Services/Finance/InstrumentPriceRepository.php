@@ -24,7 +24,10 @@ class InstrumentPriceRepository
      */
     private const REALTIME_STALE_AFTER_MINUTES = 10;
 
-    public function __construct(private readonly MarketPriceProvider $provider) {}
+    public function __construct(
+        private readonly MarketPriceProvider $provider,
+        private readonly InstrumentPriceHistoryRepository $historyRepository,
+    ) {}
 
     /**
      * Read-only lookup used by the position calculator inside an HTTP
@@ -121,6 +124,11 @@ class InstrumentPriceRepository
                 'price_date' => $price->date,
                 'fetched_at' => now(),
             ]);
+
+            // Keeps the portfolio value chart's history moving forward past
+            // InstrumentPriceHistoryRepository::backfill()'s one-time
+            // snapshot - see its upsertLatest() docblock.
+            $this->historyRepository->upsertLatest($isin, $price);
         }
 
         return $callsUsed;

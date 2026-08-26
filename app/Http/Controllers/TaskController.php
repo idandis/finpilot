@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\Tasks\TaskMoveRequest;
+use App\Http\Requests\Tasks\TaskRescheduleRequest;
 use App\Http\Requests\Tasks\TaskStoreRequest;
 use App\Http\Requests\Tasks\TaskUpdateRequest;
 use App\Models\Task;
@@ -99,17 +100,17 @@ class TaskController extends Controller
     }
 
     /**
-     * Carries an unfinished task forward one day - the one action allowed
-     * even on an otherwise read-only past day, since it doesn't rewrite
-     * what happened, it just moves the still-open item to where it'll
-     * actually get done. Always appended to the end of its status column on
-     * the new day, same positioning convention as store()/move().
+     * Moves a task to a day of the user's choosing (the picker defaults to
+     * tomorrow client-side) - the one action allowed even on an otherwise
+     * read-only past day, since it doesn't rewrite what happened, it just
+     * moves the still-open item to where it'll actually get done. Always
+     * appended to the end of its status column on the new day, same
+     * positioning convention as store()/move(). Can't target a past day,
+     * keeping the "past days are read-only" invariant intact.
      */
-    public function rescheduleToNextDay(Request $request, Task $task): RedirectResponse
+    public function reschedule(TaskRescheduleRequest $request, Task $task): RedirectResponse
     {
-        abort_unless($task->user_id === $request->user()->id, 403);
-
-        $newDate = $task->task_date->copy()->addDay();
+        $newDate = Carbon::parse($request->validated('task_date'))->startOfDay();
 
         $nextPosition = 1 + (Task::query()
             ->where('user_id', $task->user_id)
@@ -123,22 +124,33 @@ class TaskController extends Controller
     }
 
     /**
-     * Drag-and-drop between columns: the task is always appended to the end
-     * of the target column (no fine-grained reordering within a column).
+     * Drag-and-drop, both between columns and within the same column: the
+     * task is inserted at the given index of the target column and every
+     * other task in that column is reindexed around it so positions stay a
+     * dense, gapless sequence.
      */
     public function move(TaskMoveRequest $request, Task $task): RedirectResponse
     {
         abort_unless(! $task->task_date->lt(Carbon::today()), 403, 'Non è possibile modificare i task dei giorni passati.');
 
         $status = $request->validated('status');
+        $position = $request->validated('position');
 
-        $nextPosition = 1 + (Task::query()
+        $columnTasks = Task::query()
             ->where('user_id', $task->user_id)
             ->whereDate('task_date', $task->task_date)
             ->where('status', $status)
-            ->max('position') ?? -1);
+            ->where('id', '!=', $task->id)
+            ->orderBy('position')
+            ->get();
 
-        $task->update(['status' => $status, 'position' => $nextPosition]);
+        $columnTasks->splice(min($position, $columnTasks->count()), 0, [$task]);
+
+        foreach ($columnTasks->values() as $index => $columnTask) {
+            if ($columnTask->status !== $status || $columnTask->position !== $index) {
+                $columnTask->update(['status' => $status, 'position' => $index]);
+            }
+        }
 
         return back();
     }

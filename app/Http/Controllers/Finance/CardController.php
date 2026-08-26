@@ -8,6 +8,7 @@ use App\Http\Requests\Finance\CardUpdateRequest;
 use App\Models\Card;
 use App\Models\Transaction;
 use App\Models\TransactionCategory;
+use App\Services\Finance\SpendingSummaryCalculator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -17,6 +18,10 @@ use Inertia\Response;
 
 class CardController extends Controller
 {
+    public function __construct(
+        private readonly SpendingSummaryCalculator $spendingCalculator,
+    ) {}
+
     /**
      * Show all cards belonging to the user, plus a month-by-month
      * income/expense overview per card. Investment activity (buys, sells,
@@ -191,6 +196,12 @@ class CardController extends Controller
             ],
             'categoryBreakdown' => $this->categoryBreakdown($transactions, 'expense'),
             'incomeCategoryBreakdown' => $this->categoryBreakdown($transactions, 'income'),
+            'budgetComparison' => $this->spendingCalculator->calculate(
+                $request->user(),
+                collect([$card]),
+                sprintf('%04d-%02d', $year, $month),
+                $card->id,
+            ),
             'filters' => [
                 'year' => $year,
                 'month' => $month,

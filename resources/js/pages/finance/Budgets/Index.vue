@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
-import CategorySpendingChart from '@/components/finance/CategorySpendingChart.vue';
+import CategoryCompositionChart from '@/components/finance/CategoryCompositionChart.vue';
 import Heading from '@/components/Heading.vue';
 import {
     Table,
@@ -357,8 +357,8 @@ function saveBudget(row: CategoryBudgetRow) {
                 </Table>
             </TabsContent>
 
-            <TabsContent value="composizione" class="@container pt-4">
-                <CategorySpendingChart
+            <TabsContent value="composizione" class="pt-4">
+                <CategoryCompositionChart
                     :breakdown="budgetComposition"
                     currency="EUR"
                     center-label="Budget mensile"

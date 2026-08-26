@@ -9,6 +9,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
     Route::patch('tasks/{task}/move', [TaskController::class, 'move'])->name('tasks.move');
     Route::patch('tasks/{task}/schedule', [TaskController::class, 'schedule'])->name('tasks.schedule');
-    Route::patch('tasks/{task}/reschedule', [TaskController::class, 'rescheduleToNextDay'])->name('tasks.reschedule');
+    Route::patch('tasks/{task}/reschedule', [TaskController::class, 'reschedule'])->name('tasks.reschedule');
     Route::delete('tasks/{task}', [TaskController::class, 'destroy'])->name('tasks.destroy');
 });

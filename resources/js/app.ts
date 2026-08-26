@@ -1,5 +1,9 @@
 import { createInertiaApp } from '@inertiajs/vue3';
-import { initializeAccentColor, initializeFont, initializeTheme } from '@/composables/useAppearance';
+import {
+    initializeAccentColor,
+    initializeFont,
+    initializeTheme,
+} from '@/composables/useAppearance';
 import AppLayout from '@/layouts/AppLayout.vue';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import SettingsLayout from '@/layouts/settings/Layout.vue';
@@ -12,6 +16,8 @@ createInertiaApp({
     layout: (name) => {
         switch (true) {
             case name === 'Welcome':
+            case name === 'AuguriNadia':
+            case name === 'AuguriNadiaYana':
                 return null;
             case name.startsWith('auth/'):
                 return AuthLayout;

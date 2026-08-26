@@ -67,6 +67,15 @@ export type CategoryBreakdownItem = {
     amount: number;
 };
 
+export type BudgetComparisonRow = {
+    category_id: number;
+    name: string;
+    spent: number;
+    budget: number | null;
+    remaining: number | null;
+    percent_used: number | null;
+};
+
 export type CategoryRule = {
     id: number;
     user_id: number;
@@ -423,4 +432,103 @@ export type CategoryBudgetRow = {
     color: string | null;
     monthly_budget: number | null;
     card_id: number | null;
+};
+
+export type MacroIndicatorRegion = 'usa' | 'eurozone';
+
+export type MacroIndicatorSource = 'fred' | 'ecb';
+
+export type MacroIndicatorPoint = {
+    date: string;
+    value: number;
+};
+
+export type MacroIndicatorValue = {
+    value: number;
+    date: string;
+};
+
+export type MacroIndicatorTrend = 'improving' | 'worsening' | 'neutral' | 'stable';
+
+export type MacroIndicator = {
+    key: string;
+    label: string;
+    region: MacroIndicatorRegion;
+    unit: string;
+    source: MacroIndicatorSource;
+    current: MacroIndicatorValue | null;
+    previous: MacroIndicatorValue | null;
+    change_absolute: number | null;
+    change_percent: number | null;
+    history: MacroIndicatorPoint[];
+    published_at: string | null;
+    narrative: string;
+    trend: MacroIndicatorTrend;
+};
+
+export type MacroCategoryGroup = {
+    key: string;
+    label: string;
+    indicators: MacroIndicator[];
+};
+
+export type MarketOverviewTrend = 'up' | 'down' | 'neutral';
+
+export type MarketOverviewRotation = 'strong_accelerating' | 'strong_slowing' | 'weak_recovering' | 'weak_worsening';
+
+export type MarketOverviewValue = {
+    value: number;
+    date: string;
+};
+
+export type MarketOverviewInstrument = {
+    key: string;
+    label: string;
+    region: string;
+    unit: string;
+    current: MarketOverviewValue | null;
+    day_change_percent: number | null;
+    week_change_percent: number | null;
+    month_change_percent: number | null;
+    quarter_change_percent: number | null;
+    ytd_change_percent: number | null;
+    distance_from_high_percent: number | null;
+    volatility_percent: number | null;
+    trend: MarketOverviewTrend;
+    rotation: MarketOverviewRotation | null;
+    history: MacroIndicatorPoint[];
+};
+
+export type MarketOverviewCategoryGroup = {
+    key: string;
+    label: string;
+    instruments: MarketOverviewInstrument[];
+};
+
+export type EconomicRegimeSignal = {
+    label: string;
+    satisfied: boolean;
+};
+
+export type EconomicRegime = {
+    key: string;
+    label: string;
+    description: string;
+    confidence_percent: number;
+    signals: EconomicRegimeSignal[];
+};
+
+export type RiskSentiment = {
+    condition: string;
+    score: number;
+    positive_signals: string[];
+    caution_signals: string[];
+};
+
+export type MarketSentiment = {
+    sentiment: string;
+    score: number;
+    positive_signals: string[];
+    caution_signals: string[];
+    omitted_signals: string[];
 };

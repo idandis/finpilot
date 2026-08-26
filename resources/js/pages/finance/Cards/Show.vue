@@ -4,7 +4,8 @@ import { ChevronLeft, ChevronRight, Trash2 } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import TransactionImportController from '@/actions/App/Http/Controllers/Finance/TransactionImportController';
 import BankCard from '@/components/finance/BankCard.vue';
-import CategorySpendingChart from '@/components/finance/CategorySpendingChart.vue';
+import BudgetComparisonList from '@/components/finance/BudgetComparisonList.vue';
+import CategoryCompositionChart from '@/components/finance/CategoryCompositionChart.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,7 @@ import * as cardRoutes from '@/routes/cards';
 import * as cardTransactionRoutes from '@/routes/cards/transactions';
 import * as transactionRoutes from '@/routes/transactions';
 import type {
+    BudgetComparisonRow,
     Card,
     CategoryBreakdownItem,
     Transaction,
@@ -34,6 +36,7 @@ const props = defineProps<{
     totals: { income: number; expense: number };
     categoryBreakdown: CategoryBreakdownItem[];
     incomeCategoryBreakdown: CategoryBreakdownItem[];
+    budgetComparison: BudgetComparisonRow[];
     filters: { year: number; month: number };
     cardTransactionsCount: number;
 }>();
@@ -242,6 +245,7 @@ function destroyAllTransactions() {
                         <TabsTrigger value="statistiche"
                             >Statistiche</TabsTrigger
                         >
+                        <TabsTrigger value="budget">Budget</TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="movimenti" class="space-y-6 pt-4">
@@ -616,24 +620,36 @@ function destroyAllTransactions() {
                     </TabsContent>
 
                     <TabsContent value="statistiche" class="flex flex-col gap-4 pt-4">
-                        <div class="@container rounded-lg border p-4">
+                        <div class="rounded-lg border p-4">
                             <p class="mb-4 text-sm font-medium">
                                 Spesa per categoria · {{ monthLabel }}
                             </p>
-                            <CategorySpendingChart
+                            <CategoryCompositionChart
                                 :breakdown="categoryBreakdown"
                                 :currency="currency"
                             />
                         </div>
-                        <div class="@container rounded-lg border p-4">
+                        <div class="rounded-lg border p-4">
                             <p class="mb-4 text-sm font-medium">
                                 Entrate per categoria · {{ monthLabel }}
                             </p>
-                            <CategorySpendingChart
+                            <CategoryCompositionChart
                                 :breakdown="incomeCategoryBreakdown"
                                 :currency="currency"
                                 center-label="Entrate"
                                 empty-message="Nessuna entrata da mostrare per questo mese."
+                            />
+                        </div>
+                    </TabsContent>
+
+                    <TabsContent value="budget" class="pt-4">
+                        <div class="rounded-lg border p-4">
+                            <p class="mb-4 text-sm font-medium">
+                                Budget · {{ monthLabel }}
+                            </p>
+                            <BudgetComparisonList
+                                :rows="budgetComparison"
+                                :currency="currency"
                             />
                         </div>
                     </TabsContent>

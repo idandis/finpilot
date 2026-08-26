@@ -23,6 +23,12 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+} from '@/components/ui/sheet';
 import * as dishRoutes from '@/routes/dishes';
 import * as mealRoutes from '@/routes/meals';
 import type {
@@ -303,9 +309,12 @@ function removeIngredientRow(key: number) {
     );
 }
 
+const dishDescriptionForForm = ref('');
+
 function openCreateDishDialog() {
     dishDialogTarget.value = 'new';
     ingredientRows.value = [];
+    dishDescriptionForForm.value = '';
 }
 
 function openEditDishDialog(dish: Dish) {
@@ -315,6 +324,7 @@ function openEditDishDialog(dish: Dish) {
         name: ingredient.name,
         category: ingredient.category,
     }));
+    dishDescriptionForForm.value = dish.description ?? '';
 }
 
 function closeDishDialog() {
@@ -673,7 +683,7 @@ function openAddDialog(
             </div>
         </div>
 
-        <Dialog
+        <Sheet
             :open="isDishDialogOpen"
             @update:open="
                 (open) => {
@@ -681,12 +691,12 @@ function openAddDialog(
                 }
             "
         >
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>{{
+            <SheetContent class="w-full gap-0 overflow-y-auto sm:max-w-lg">
+                <SheetHeader>
+                    <SheetTitle>{{
                         editingDish ? 'Modifica piatto' : 'Nuovo piatto'
-                    }}</DialogTitle>
-                </DialogHeader>
+                    }}</SheetTitle>
+                </SheetHeader>
                 <Form
                     :key="editingDish ? `dish-${editingDish.id}` : 'dish-new'"
                     v-bind="
@@ -695,7 +705,7 @@ function openAddDialog(
                             : DishController.store.form()
                     "
                     :reset-on-success="!editingDish"
-                    class="grid grid-cols-1 gap-4"
+                    class="grid grid-cols-1 gap-4 px-4 pb-4"
                     v-slot="{ errors, processing }"
                     @success="closeDishDialog"
                 >
@@ -717,11 +727,11 @@ function openAddDialog(
                         >
                         <textarea
                             id="dish-description"
+                            v-model="dishDescriptionForForm"
                             name="description"
                             rows="2"
                             placeholder="Dettagli aggiuntivi..."
                             class="w-full min-w-0 resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 md:text-sm dark:aria-invalid:ring-destructive/40"
-                            :value="editingDish?.description ?? ''"
                         ></textarea>
                         <InputError :message="errors.description" />
                     </div>
@@ -810,8 +820,8 @@ function openAddDialog(
                         editingDish ? 'Salva modifiche' : 'Aggiungi piatto'
                     }}</Button>
                 </Form>
-            </DialogContent>
-        </Dialog>
+            </SheetContent>
+        </Sheet>
 
         <Dialog v-model:open="isAddMealOpen">
             <DialogContent>

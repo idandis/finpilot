@@ -7,6 +7,8 @@ use App\Contracts\MarketPriceProvider;
 use App\Contracts\ResolvedSymbol;
 use App\Exceptions\Finance\MarketPriceProviderUnavailableException;
 use App\Models\InstrumentPrice;
+use App\Models\InstrumentPriceHistory;
+use App\Services\Finance\InstrumentPriceHistoryRepository;
 use App\Services\Finance\InstrumentPriceRepository;
 use Carbon\CarbonInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -17,6 +19,11 @@ class InstrumentPriceRepositoryTest extends TestCase
 {
     use RefreshDatabase;
 
+    private function makeRepository(MarketPriceProvider $provider): InstrumentPriceRepository
+    {
+        return new InstrumentPriceRepository($provider, new InstrumentPriceHistoryRepository($provider));
+    }
+
     public function test_first_refresh_resolves_the_symbol_and_fetches_the_price_using_two_calls()
     {
         $provider = new FakeMarketPriceProvider(
@@ -24,7 +31,7 @@ class InstrumentPriceRepositoryTest extends TestCase
             price: new FetchedPrice(price: 105.32, date: Carbon::parse('2026-07-22')),
         );
 
-        $repository = new InstrumentPriceRepository($provider);
+        $repository = $this->makeRepository($provider);
         $callsUsed = $repository->refresh('IE00BK5BQT80', callsRemaining: 10);
 
         $this->assertSame(2, $callsUsed);
@@ -50,7 +57,7 @@ class InstrumentPriceRepositoryTest extends TestCase
         ]);
 
         $provider = new FakeMarketPriceProvider;
-        $repository = new InstrumentPriceRepository($provider);
+        $repository = $this->makeRepository($provider);
 
         $callsUsed = $repository->refresh('IE00BK5BQT80', callsRemaining: 10);
 
@@ -72,7 +79,7 @@ class InstrumentPriceRepositoryTest extends TestCase
         $provider = new FakeMarketPriceProvider(
             price: new FetchedPrice(price: 110.00, date: Carbon::parse('2026-07-24')),
         );
-        $repository = new InstrumentPriceRepository($provider);
+        $repository = $this->makeRepository($provider);
 
         $callsUsed = $repository->refresh('IE00BK5BQT80', callsRemaining: 10, force: true);
 
@@ -95,13 +102,63 @@ class InstrumentPriceRepositoryTest extends TestCase
             price: new FetchedPrice(price: 110.00, date: Carbon::parse('2026-07-23')),
         );
 
-        $repository = new InstrumentPriceRepository($provider);
+        $repository = $this->makeRepository($provider);
         $callsUsed = $repository->refresh('IE00BK5BQT80', callsRemaining: 10);
 
         $this->assertSame(1, $callsUsed);
         $this->assertSame(0, $provider->resolveCalls);
         $this->assertSame(1, $provider->fetchCalls);
         $this->assertDatabaseHas('instrument_prices', ['isin' => 'IE00BK5BQT80', 'last_price' => 110.00]);
+    }
+
+    public function test_refreshing_the_price_also_appends_it_to_the_chart_history()
+    {
+        InstrumentPrice::factory()->create([
+            'isin' => 'IE00BK5BQT80',
+            'code' => 'VWCE',
+            'exchange' => 'XETRA',
+            'fetched_at' => now()->subHours(25),
+        ]);
+
+        $provider = new FakeMarketPriceProvider(
+            price: new FetchedPrice(price: 110.00, date: Carbon::parse('2026-07-23')),
+        );
+
+        $this->makeRepository($provider)->refresh('IE00BK5BQT80', callsRemaining: 10);
+
+        $this->assertDatabaseHas('instrument_price_history', [
+            'isin' => 'IE00BK5BQT80',
+            'price_date' => '2026-07-23 00:00:00',
+            'close_price' => 110.00,
+        ]);
+    }
+
+    public function test_refreshing_the_price_updates_an_existing_history_row_for_the_same_day_instead_of_duplicating_it()
+    {
+        InstrumentPriceHistory::factory()->create([
+            'isin' => 'IE00BK5BQT80',
+            'price_date' => '2026-07-23',
+            'close_price' => 105.00,
+        ]);
+        InstrumentPrice::factory()->create([
+            'isin' => 'IE00BK5BQT80',
+            'code' => 'VWCE',
+            'exchange' => 'XETRA',
+            'fetched_at' => now(),
+        ]);
+
+        $provider = new FakeMarketPriceProvider(
+            price: new FetchedPrice(price: 110.00, date: Carbon::parse('2026-07-23')),
+        );
+
+        $this->makeRepository($provider)->refresh('IE00BK5BQT80', callsRemaining: 10, force: true);
+
+        $this->assertDatabaseCount('instrument_price_history', 1);
+        $this->assertDatabaseHas('instrument_price_history', [
+            'isin' => 'IE00BK5BQT80',
+            'price_date' => '2026-07-23 00:00:00',
+            'close_price' => 110.00,
+        ]);
     }
 
     public function test_an_isin_with_failed_resolution_is_never_retried()
@@ -115,7 +172,7 @@ class InstrumentPriceRepositoryTest extends TestCase
         ]);
 
         $provider = new FakeMarketPriceProvider;
-        $repository = new InstrumentPriceRepository($provider);
+        $repository = $this->makeRepository($provider);
 
         $callsUsed = $repository->refresh('XX0000000000', callsRemaining: 10);
 
@@ -126,7 +183,7 @@ class InstrumentPriceRepositoryTest extends TestCase
     public function test_a_resolution_that_could_not_be_attempted_is_not_marked_as_permanently_failed()
     {
         $provider = new FakeUnavailableMarketPriceProvider;
-        $repository = new InstrumentPriceRepository($provider);
+        $repository = $this->makeRepository($provider);
 
         $callsUsed = $repository->refresh('IE00BK5BQT80', callsRemaining: 10);
 
@@ -144,7 +201,7 @@ class InstrumentPriceRepositoryTest extends TestCase
             price: new FetchedPrice(price: 65000.0, date: Carbon::parse('2026-07-24')),
         );
 
-        $repository = new InstrumentPriceRepository($provider);
+        $repository = $this->makeRepository($provider);
         $callsUsed = $repository->refresh('XF000BTC0017', callsRemaining: 10);
 
         // Resolution itself cost nothing (derived from the pseudo-ISIN) -
@@ -178,7 +235,7 @@ class InstrumentPriceRepositoryTest extends TestCase
         $provider = new FakeMarketPriceProvider(
             price: new FetchedPrice(price: 3000.0, date: Carbon::parse('2026-07-24')),
         );
-        $repository = new InstrumentPriceRepository($provider);
+        $repository = $this->makeRepository($provider);
 
         $callsUsed = $repository->refresh('XF000ETH0019', callsRemaining: 10);
 
@@ -199,7 +256,7 @@ class InstrumentPriceRepositoryTest extends TestCase
             resolved: new ResolvedSymbol(code: 'VWCE', exchange: 'XETRA', currency: 'EUR'),
         );
 
-        $repository = new InstrumentPriceRepository($provider);
+        $repository = $this->makeRepository($provider);
         $callsUsed = $repository->refresh('IE00BK5BQT80', callsRemaining: 0);
 
         $this->assertSame(0, $callsUsed);
@@ -220,7 +277,7 @@ class InstrumentPriceRepositoryTest extends TestCase
             realtimePrice: new FetchedPrice(price: 101.5, date: Carbon::parse('2026-07-28 12:00:00')),
         );
 
-        $repository = new InstrumentPriceRepository($provider);
+        $repository = $this->makeRepository($provider);
         $callsUsed = $repository->refreshRealtime('IE00BK5BQT80', callsRemaining: 10);
 
         $this->assertSame(1, $callsUsed);
@@ -246,7 +303,7 @@ class InstrumentPriceRepositoryTest extends TestCase
             realtimePrice: new FetchedPrice(price: 101.5, date: Carbon::parse('2026-07-28 12:00:00')),
         );
 
-        $repository = new InstrumentPriceRepository($provider);
+        $repository = $this->makeRepository($provider);
         $callsUsed = $repository->refreshRealtime('IE00BK5BQT80', callsRemaining: 10);
 
         $this->assertSame(0, $callsUsed);
@@ -267,7 +324,7 @@ class InstrumentPriceRepositoryTest extends TestCase
             realtimePrice: new FetchedPrice(price: 105.0, date: Carbon::parse('2026-07-28 12:00:00')),
         );
 
-        $repository = new InstrumentPriceRepository($provider);
+        $repository = $this->makeRepository($provider);
         $callsUsed = $repository->refreshRealtime('IE00BK5BQT80', callsRemaining: 10);
 
         $this->assertSame(0, $callsUsed);
@@ -289,7 +346,7 @@ class InstrumentPriceRepositoryTest extends TestCase
             realtimePrice: new FetchedPrice(price: 105.0, date: Carbon::parse('2026-07-28 12:00:00')),
         );
 
-        $repository = new InstrumentPriceRepository($provider);
+        $repository = $this->makeRepository($provider);
         $callsUsed = $repository->refreshRealtime('IE00BK5BQT80', callsRemaining: 10, force: true);
 
         $this->assertSame(1, $callsUsed);

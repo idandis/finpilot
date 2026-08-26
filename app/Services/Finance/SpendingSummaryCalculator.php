@@ -22,9 +22,10 @@ class SpendingSummaryCalculator
      *
      * @param  Collection<int, Card>  $cards  the user's cards, scoped the same way AccountBalanceCalculator does
      * @param  string|null  $month  'Y-m', defaults to the current month
+     * @param  int|null  $budgetCardId  when set, only budgets attributed to this specific card are compared against - budgets left unassigned or attributed to a different card are treated as not set
      * @return array<int, array{category_id: int, name: string, spent: float, budget: float|null, remaining: float|null, percent_used: float|null}>
      */
-    public function calculate(User $user, Collection $cards, ?string $month = null): array
+    public function calculate(User $user, Collection $cards, ?string $month = null, ?int $budgetCardId = null): array
     {
         $reference = $month !== null ? Carbon::createFromFormat('Y-m', $month) : Carbon::now();
         $start = $reference->copy()->startOfMonth();
@@ -41,6 +42,7 @@ class SpendingSummaryCalculator
 
         $budgets = CategoryBudget::query()
             ->where('user_id', $user->id)
+            ->when($budgetCardId !== null, fn ($query) => $query->where('card_id', $budgetCardId))
             ->get()
             ->keyBy('transaction_category_id');
 

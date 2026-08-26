@@ -26,6 +26,7 @@ class TaskMoveRequest extends FormRequest
     {
         return [
             'status' => ['required', Rule::in(Task::STATUSES)],
+            'position' => ['required', 'integer', 'min:0'],
         ];
     }
 }
