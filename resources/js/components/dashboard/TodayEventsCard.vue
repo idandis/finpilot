@@ -24,7 +24,7 @@ function timeLabel(event: DashboardEvent): string {
 </script>
 
 <template>
-    <Card class="border-none bg-muted/40 shadow-none">
+    <Card class="border-none bg-muted dark:bg-muted/40 shadow-none">
         <CardHeader>
             <div class="flex items-center justify-between">
                 <CardTitle class="flex items-center gap-2 text-base">

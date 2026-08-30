@@ -237,7 +237,7 @@ function closePhotoModal() {
                             class="hidden size-3 shrink-0 self-start justify-self-center rounded-full bg-primary ring-4 ring-background sm:col-start-2 sm:mt-4 sm:block"
                         />
                         <div
-                            class="rounded-xl bg-muted/40 p-4 transition"
+                            class="rounded-xl bg-muted dark:bg-muted/40 p-4 transition"
                             :class="[
                                 index % 2 === 0 ? 'sm:col-start-1' : 'sm:col-start-3 sm:row-start-1',
                                 isToday(day.date) && 'border-2 border-primary',

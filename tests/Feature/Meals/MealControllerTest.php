@@ -277,6 +277,102 @@ class MealControllerTest extends TestCase
         $this->assertDatabaseHas('meals', ['id' => $meal->id, 'meal_type' => 'lunch']);
     }
 
+    public function test_a_user_can_edit_a_meal_they_planned()
+    {
+        $user = User::factory()->create();
+        $monday = Carbon::today()->startOfWeek(Carbon::MONDAY);
+        $meal = Meal::factory()->create([
+            'user_id' => $user->id,
+            'meal_date' => $monday,
+            'meal_type' => 'lunch',
+            'title' => 'Pasta',
+            'description' => null,
+            'category' => null,
+            'position' => 3,
+        ]);
+
+        $response = $this->actingAs($user)->patch(route('meals.update', $meal), [
+            'title' => 'Pasta al pesto',
+            'description' => 'Con i pinoli',
+            'category' => 'pasta_riso',
+        ]);
+
+        $response->assertRedirect();
+        $meal->refresh();
+        $this->assertSame('Pasta al pesto', $meal->title);
+        $this->assertSame('Con i pinoli', $meal->description);
+        $this->assertSame('pasta_riso', $meal->category);
+        // Editing leaves where the meal sits in the week alone.
+        $this->assertSame($monday->toDateString(), $meal->meal_date->toDateString());
+        $this->assertSame('lunch', $meal->meal_type);
+        $this->assertSame(3, $meal->position);
+    }
+
+    public function test_editing_a_meal_can_clear_its_category_and_change_its_cook()
+    {
+        $owner = User::factory()->create();
+        $mate = User::factory()->create();
+        $owner->mealPlanMembers()->attach($mate->id);
+        $meal = Meal::factory()->create([
+            'user_id' => $owner->id,
+            'meal_date' => Carbon::today(),
+            'meal_type' => 'dinner',
+            'category' => 'carne',
+            'assigned_to_user_id' => $owner->id,
+        ]);
+
+        $this->actingAs($mate)->patch(route('meals.update', $meal), [
+            'title' => 'Insalatona',
+            'category' => '',
+            'assigned_to_user_id' => $mate->id,
+        ]);
+
+        $meal->refresh();
+        $this->assertNull($meal->category);
+        $this->assertSame($mate->id, $meal->assigned_to_user_id);
+    }
+
+    public function test_editing_a_meal_requires_a_title_and_a_valid_category()
+    {
+        $user = User::factory()->create();
+        $meal = Meal::factory()->create(['user_id' => $user->id, 'title' => 'Pasta']);
+
+        $this->actingAs($user)->patch(route('meals.update', $meal), ['title' => ''])
+            ->assertSessionHasErrors('title');
+
+        $this->actingAs($user)->patch(route('meals.update', $meal), ['title' => 'Pasta', 'category' => 'inesistente'])
+            ->assertSessionHasErrors('category');
+
+        $this->assertSame('Pasta', $meal->fresh()->title);
+    }
+
+    public function test_a_meal_cannot_be_edited_to_a_cook_outside_its_plan()
+    {
+        $owner = User::factory()->create();
+        $stranger = User::factory()->create();
+        $meal = Meal::factory()->create(['user_id' => $owner->id]);
+
+        $response = $this->actingAs($owner)->patch(route('meals.update', $meal), [
+            'title' => 'Pasta',
+            'assigned_to_user_id' => $stranger->id,
+        ]);
+
+        $response->assertSessionHasErrors('assigned_to_user_id');
+        $this->assertNull($meal->fresh()->assigned_to_user_id);
+    }
+
+    public function test_a_user_cannot_edit_a_meal_on_a_plan_they_are_not_on()
+    {
+        $owner = User::factory()->create();
+        $stranger = User::factory()->create();
+        $meal = Meal::factory()->create(['user_id' => $owner->id, 'title' => 'Pasta']);
+
+        $response = $this->actingAs($stranger)->patch(route('meals.update', $meal), ['title' => 'Rubato']);
+
+        $response->assertForbidden();
+        $this->assertSame('Pasta', $meal->fresh()->title);
+    }
+
     public function test_a_user_can_delete_their_own_meal()
     {
         $user = User::factory()->create();
@@ -332,6 +428,37 @@ class MealControllerTest extends TestCase
         $text = (new Parser)->parseContent($response->getContent())->getText();
         $this->assertStringContainsString('Questa settimana', $text);
         $this->assertStringNotContainsString('Settimana scorsa', $text);
+    }
+
+    public function test_the_pdf_names_whoever_is_cooking_each_meal()
+    {
+        $owner = User::factory()->create();
+        $mate = User::factory()->create(['name' => 'Nicolas Picco']);
+        $owner->mealPlanMembers()->attach($mate->id);
+        $monday = today()->startOfWeek(Carbon::MONDAY);
+        Meal::factory()->create([
+            'user_id' => $owner->id,
+            'meal_date' => $monday,
+            'meal_type' => 'lunch',
+            'title' => 'Pasta al pesto',
+            'assigned_to_user_id' => $mate->id,
+        ]);
+        Meal::factory()->create([
+            'user_id' => $owner->id,
+            'meal_date' => $monday,
+            'meal_type' => 'dinner',
+            'title' => 'Minestrone',
+            'assigned_to_user_id' => null,
+        ]);
+
+        $response = $this->actingAs($owner)->get(route('meals.pdf'));
+
+        $response->assertOk();
+
+        $text = (new Parser)->parseContent($response->getContent())->getText();
+        $this->assertStringContainsString('Cucina Nicolas Picco', $text);
+        // A meal nobody is cooking says nothing at all.
+        $this->assertSame(1, substr_count($text, 'Cucina'));
     }
 
     public function test_a_user_only_sees_their_own_meals_in_the_pdf()
@@ -466,5 +593,207 @@ class MealControllerTest extends TestCase
         $list = ShoppingList::query()->where('user_id', $user->id)->firstOrFail();
         $this->assertDatabaseHas('shopping_list_items', ['shopping_list_id' => $list->id, 'name' => 'Il mio pasto']);
         $this->assertDatabaseMissing('shopping_list_items', ['shopping_list_id' => $list->id, 'name' => 'Pasto di un altro']);
+    }
+
+    public function test_a_plan_can_be_shared_by_email_and_shows_up_in_the_other_users_switcher()
+    {
+        $owner = User::factory()->create(['name' => 'Iana Longo']);
+        $mate = User::factory()->create(['email' => 'mate@example.com']);
+
+        $this->actingAs($owner)->post(route('meal-plan.members.store'), ['email' => 'mate@example.com']);
+
+        $this->assertTrue($owner->mealPlanMembers()->whereKey($mate->id)->exists());
+
+        $this->actingAs($mate)->get(route('meals.index'))
+            ->assertInertia(fn ($page) => $page
+                ->has('plans', 2)
+                ->where('plans.0.name', 'I miei pasti')
+                ->where('plans.1.name', 'Iana Longo')
+                ->where('plans.1.is_shared', true)
+                ->where('plan.is_owner', true)
+            );
+    }
+
+    public function test_a_member_sees_and_works_on_the_shared_week()
+    {
+        $owner = User::factory()->create();
+        $mate = User::factory()->create();
+        $owner->mealPlanMembers()->attach($mate->id);
+        $monday = Carbon::today()->startOfWeek(Carbon::MONDAY);
+        $ownersMeal = Meal::factory()->create([
+            'user_id' => $owner->id,
+            'title' => "Dell'owner",
+            'meal_date' => $monday,
+            'meal_type' => 'lunch',
+        ]);
+
+        $this->actingAs($mate)->get(route('meals.index', ['plan' => $owner->id]))
+            ->assertInertia(fn ($page) => $page
+                ->has('meals', 1)
+                ->where('meals.0.title', "Dell'owner")
+                ->where('plan.is_owner', false)
+                ->has('plan.people', 2)
+            );
+
+        $this->actingAs($mate)->post(route('meals.store'), [
+            'title' => 'Del membro',
+            'meal_date' => $monday->toDateString(),
+            'meal_type' => 'dinner',
+            'plan_user_id' => $owner->id,
+        ]);
+        $this->assertDatabaseHas('meals', ['title' => 'Del membro', 'user_id' => $owner->id]);
+
+        $this->actingAs($mate)->patch(route('meals.move', $ownersMeal), [
+            'meal_date' => $monday->copy()->addDay()->toDateString(),
+            'meal_type' => 'dinner',
+        ]);
+        $this->assertSame('dinner', $ownersMeal->fresh()->meal_type);
+
+        $this->actingAs($mate)->delete(route('meals.destroy', $ownersMeal));
+        $this->assertDatabaseMissing('meals', ['id' => $ownersMeal->id]);
+    }
+
+    public function test_a_plan_the_user_was_not_invited_to_falls_back_to_their_own()
+    {
+        $owner = User::factory()->create();
+        $stranger = User::factory()->create();
+        $monday = Carbon::today()->startOfWeek(Carbon::MONDAY);
+        $meal = Meal::factory()->create(['user_id' => $owner->id, 'meal_date' => $monday, 'meal_type' => 'lunch']);
+
+        $this->actingAs($stranger)->get(route('meals.index', ['plan' => $owner->id]))
+            ->assertInertia(fn ($page) => $page
+                ->where('plan.id', $stranger->id)
+                ->where('plan.is_owner', true)
+                ->has('meals', 0)
+            );
+
+        $this->actingAs($stranger)->patch(route('meals.move', $meal), [
+            'meal_date' => $monday->toDateString(),
+            'meal_type' => 'dinner',
+        ])->assertForbidden();
+        $this->actingAs($stranger)->delete(route('meals.destroy', $meal))->assertForbidden();
+    }
+
+    public function test_a_meal_added_to_a_plan_the_user_cannot_reach_is_rejected()
+    {
+        $owner = User::factory()->create();
+        $stranger = User::factory()->create();
+
+        $response = $this->actingAs($stranger)->post(route('meals.store'), [
+            'title' => 'Intruso',
+            'meal_date' => Carbon::today()->toDateString(),
+            'meal_type' => 'lunch',
+            'plan_user_id' => $owner->id,
+        ]);
+
+        $response->assertSessionHasErrors('plan_user_id');
+        $this->assertDatabaseCount('meals', 0);
+    }
+
+    public function test_a_meal_can_be_assigned_to_anyone_on_its_plan_and_unassigned()
+    {
+        $owner = User::factory()->create();
+        $mate = User::factory()->create(['name' => 'Nicolas Picco']);
+        $owner->mealPlanMembers()->attach($mate->id);
+        $monday = Carbon::today()->startOfWeek(Carbon::MONDAY);
+        $meal = Meal::factory()->create(['user_id' => $owner->id, 'meal_date' => $monday, 'meal_type' => 'lunch']);
+
+        $this->actingAs($mate)->patch(route('meals.assign', $meal), ['assigned_to_user_id' => $mate->id]);
+        $this->assertSame($mate->id, $meal->fresh()->assigned_to_user_id);
+
+        $this->actingAs($owner)->get(route('meals.index'))
+            ->assertInertia(fn ($page) => $page->where('meals.0.assignee.name', 'Nicolas Picco'));
+
+        $this->actingAs($owner)->patch(route('meals.assign', $meal), ['assigned_to_user_id' => null]);
+        $this->assertNull($meal->fresh()->assigned_to_user_id);
+    }
+
+    public function test_a_meal_cannot_be_assigned_to_someone_outside_its_plan()
+    {
+        $owner = User::factory()->create();
+        $stranger = User::factory()->create();
+        $meal = Meal::factory()->create(['user_id' => $owner->id, 'meal_date' => Carbon::today(), 'meal_type' => 'lunch']);
+
+        $response = $this->actingAs($owner)->patch(route('meals.assign', $meal), ['assigned_to_user_id' => $stranger->id]);
+
+        $response->assertSessionHasErrors('assigned_to_user_id');
+        $this->assertNull($meal->fresh()->assigned_to_user_id);
+    }
+
+    public function test_an_unknown_email_or_a_duplicate_cannot_be_invited_to_a_plan()
+    {
+        $owner = User::factory()->create(['email' => 'owner@example.com']);
+        $mate = User::factory()->create(['email' => 'mate@example.com']);
+        $owner->mealPlanMembers()->attach($mate->id);
+
+        $this->actingAs($owner)->post(route('meal-plan.members.store'), ['email' => 'nessuno@example.com'])
+            ->assertSessionHasErrors('email');
+        $this->actingAs($owner)->post(route('meal-plan.members.store'), ['email' => 'owner@example.com'])
+            ->assertSessionHasErrors('email');
+        $this->actingAs($owner)->post(route('meal-plan.members.store'), ['email' => 'mate@example.com'])
+            ->assertSessionHasErrors('email');
+
+        $this->assertSame(1, $owner->mealPlanMembers()->count());
+    }
+
+    public function test_removing_someone_from_a_plan_frees_the_meals_they_were_cooking()
+    {
+        $owner = User::factory()->create();
+        $mate = User::factory()->create();
+        $owner->mealPlanMembers()->attach($mate->id);
+        $meal = Meal::factory()->create([
+            'user_id' => $owner->id,
+            'assigned_to_user_id' => $mate->id,
+            'meal_date' => Carbon::today(),
+            'meal_type' => 'lunch',
+        ]);
+
+        $this->actingAs($owner)->delete(route('meal-plan.members.destroy', [$owner, $mate]));
+
+        $this->assertSame(0, $owner->mealPlanMembers()->count());
+        $this->assertNull($meal->fresh()->assigned_to_user_id);
+    }
+
+    public function test_a_member_can_leave_a_plan_but_cannot_remove_anyone_else()
+    {
+        $owner = User::factory()->create();
+        $mate = User::factory()->create();
+        $other = User::factory()->create();
+        $owner->mealPlanMembers()->attach([$mate->id, $other->id]);
+
+        $this->actingAs($mate)->delete(route('meal-plan.members.destroy', [$owner, $other]))
+            ->assertForbidden();
+
+        $response = $this->actingAs($mate)->delete(route('meal-plan.members.destroy', [$owner, $mate]));
+
+        $response->assertRedirect(route('meals.index'));
+        $this->assertFalse($owner->mealPlanMembers()->whereKey($mate->id)->exists());
+        $this->assertTrue($owner->mealPlanMembers()->whereKey($other->id)->exists());
+    }
+
+    public function test_the_owner_cannot_be_removed_from_their_own_plan()
+    {
+        $owner = User::factory()->create();
+
+        $this->actingAs($owner)->delete(route('meal-plan.members.destroy', [$owner, $owner]))
+            ->assertForbidden();
+    }
+
+    public function test_the_shopping_list_is_generated_from_the_plan_being_shown()
+    {
+        $owner = User::factory()->create();
+        $mate = User::factory()->create();
+        $owner->mealPlanMembers()->attach($mate->id);
+        $monday = Carbon::today()->startOfWeek(Carbon::MONDAY);
+        Meal::factory()->create(['user_id' => $owner->id, 'title' => 'Pollo', 'meal_date' => $monday, 'meal_type' => 'lunch']);
+        Meal::factory()->create(['user_id' => $mate->id, 'title' => 'Solo mio', 'meal_date' => $monday, 'meal_type' => 'lunch']);
+
+        $this->actingAs($mate)->post(route('meals.generate-shopping-list', [
+            'date' => $monday->toDateString(),
+            'plan' => $owner->id,
+        ]));
+
+        $list = ShoppingList::query()->where('user_id', $mate->id)->sole();
+        $this->assertSame(['Pollo'], $list->items()->pluck('name')->all());
     }
 }

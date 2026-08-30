@@ -472,7 +472,7 @@ function deleteJournalEntryAndClose(journalEntryId: number) {
                                 <li
                                     v-for="note in notes"
                                     :key="note.id"
-                                    class="cursor-pointer rounded-lg bg-muted/40 p-3 transition-colors hover:bg-muted/70"
+                                    class="cursor-pointer rounded-lg bg-muted dark:bg-muted/40 p-3 transition-colors hover:bg-muted/70"
                                     @click="activeDetail = { kind: 'note', note }"
                                 >
                                     <p class="line-clamp-3 text-sm whitespace-pre-wrap">{{ note.body }}</p>
@@ -540,7 +540,7 @@ function deleteJournalEntryAndClose(journalEntryId: number) {
                                     <li
                                         v-for="highlight in news.highlights"
                                         :key="highlight.id"
-                                        class="flex flex-wrap items-center gap-2 rounded-lg bg-muted/40 p-3 text-sm"
+                                        class="flex flex-wrap items-center gap-2 rounded-lg bg-muted dark:bg-muted/40 p-3 text-sm"
                                     >
                                         <span
                                             v-if="sentiment(highlight.sentiment_polarity)"
@@ -617,7 +617,7 @@ function deleteJournalEntryAndClose(journalEntryId: number) {
                                     <li
                                         v-for="article in paginatedNewsArticles"
                                         :key="article.id"
-                                        class="rounded-lg bg-muted/40 p-4"
+                                        class="rounded-lg bg-muted dark:bg-muted/40 p-4"
                                     >
                                         <div class="flex items-start justify-between gap-4">
                                             <a
@@ -946,7 +946,7 @@ function deleteJournalEntryAndClose(journalEntryId: number) {
                             </div>
                         </div>
 
-                        <div v-if="fundamentals.valuation.verdict" class="rounded-lg bg-muted/40 p-4">
+                        <div v-if="fundamentals.valuation.verdict" class="rounded-lg bg-muted dark:bg-muted/40 p-4">
                             <p class="text-sm font-medium" :class="VERDICT_META[fundamentals.valuation.verdict].class">
                                 {{ VERDICT_META[fundamentals.valuation.verdict].emoji }}
                                 {{ VERDICT_META[fundamentals.valuation.verdict].label }}
@@ -981,7 +981,7 @@ function deleteJournalEntryAndClose(journalEntryId: number) {
                             v-bind="InvestmentEventController.store.form(investment.id)"
                             reset-on-success
                             v-slot="{ errors, processing }"
-                            class="space-y-3 rounded-lg bg-muted/40 p-4"
+                            class="space-y-3 rounded-lg bg-muted dark:bg-muted/40 p-4"
                         >
                             <div class="grid grid-cols-2 gap-4">
                                 <div>
@@ -1035,7 +1035,7 @@ function deleteJournalEntryAndClose(journalEntryId: number) {
                             <li
                                 v-for="event in investment.events"
                                 :key="event.id"
-                                class="cursor-pointer rounded-lg bg-muted/40 p-3 transition-colors hover:bg-muted/70"
+                                class="cursor-pointer rounded-lg bg-muted dark:bg-muted/40 p-3 transition-colors hover:bg-muted/70"
                                 @click="activeDetail = { kind: 'event', event }"
                             >
                                 <div class="flex items-center justify-between gap-4">
@@ -1073,7 +1073,7 @@ function deleteJournalEntryAndClose(journalEntryId: number) {
                     </div>
 
                     <div v-else class="max-w-2xl space-y-10">
-                        <div class="rounded-lg bg-muted/40 p-4">
+                        <div class="rounded-lg bg-muted dark:bg-muted/40 p-4">
                             <h4 class="mb-3 text-sm font-medium">Prossima review</h4>
                             <Form
                                 :key="investment.updated_at"
@@ -1122,7 +1122,7 @@ function deleteJournalEntryAndClose(journalEntryId: number) {
                                 v-bind="InvestmentReviewController.store.form(investment.id)"
                                 reset-on-success
                                 v-slot="{ errors, processing }"
-                                class="space-y-3 rounded-lg bg-muted/40 p-4"
+                                class="space-y-3 rounded-lg bg-muted dark:bg-muted/40 p-4"
                             >
                                 <div v-if="investment.events.length > 0">
                                     <Label for="investment_event_id">Evento collegato (opzionale)</Label>
@@ -1178,7 +1178,7 @@ function deleteJournalEntryAndClose(journalEntryId: number) {
                                 <li
                                     v-for="review in investment.reviews"
                                     :key="review.id"
-                                    class="cursor-pointer rounded-lg bg-muted/40 p-3 transition-colors hover:bg-muted/70"
+                                    class="cursor-pointer rounded-lg bg-muted dark:bg-muted/40 p-3 transition-colors hover:bg-muted/70"
                                     @click="activeDetail = { kind: 'review', review }"
                                 >
                                     <div class="flex items-center justify-between">
@@ -1221,7 +1221,7 @@ function deleteJournalEntryAndClose(journalEntryId: number) {
                             v-bind="InvestmentJournalEntryController.store.form(investment.id)"
                             reset-on-success
                             v-slot="{ errors, processing }"
-                            class="space-y-3 rounded-lg bg-muted/40 p-4"
+                            class="space-y-3 rounded-lg bg-muted dark:bg-muted/40 p-4"
                         >
                             <div class="grid grid-cols-2 gap-4">
                                 <div>
@@ -1254,7 +1254,7 @@ function deleteJournalEntryAndClose(journalEntryId: number) {
                             <li
                                 v-for="(event, index) in journal"
                                 :key="index"
-                                class="cursor-pointer rounded-lg bg-muted/40 p-3 transition-colors hover:bg-muted/70"
+                                class="cursor-pointer rounded-lg bg-muted dark:bg-muted/40 p-3 transition-colors hover:bg-muted/70"
                                 @click="activeDetail = { kind: 'journal', entry: event }"
                             >
                                 <div class="flex items-center justify-between">

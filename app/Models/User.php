@@ -7,11 +7,13 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Laravel\Fortify\Contracts\PasskeyUser;
 use Laravel\Fortify\PasskeyAuthenticatable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
@@ -123,11 +125,85 @@ class User extends Authenticatable implements PasskeyUser
     }
 
     /**
+     * @return HasMany<TaskBoard, $this>
+     */
+    public function taskBoards(): HasMany
+    {
+        return $this->hasMany(TaskBoard::class);
+    }
+
+    /**
+     * Boards someone else owns and shared with this user.
+     *
+     * @return BelongsToMany<TaskBoard, $this>
+     */
+    public function sharedTaskBoards(): BelongsToMany
+    {
+        return $this->belongsToMany(TaskBoard::class, 'task_board_members')->withTimestamps();
+    }
+
+    /**
      * @return HasMany<ShoppingList, $this>
      */
     public function shoppingLists(): HasMany
     {
         return $this->hasMany(ShoppingList::class);
+    }
+
+    /**
+     * Lists someone else owns and shared with this user.
+     *
+     * @return BelongsToMany<ShoppingList, $this>
+     */
+    public function sharedShoppingLists(): BelongsToMany
+    {
+        return $this->belongsToMany(ShoppingList::class, 'shopping_list_members')->withTimestamps();
+    }
+
+    /**
+     * A meal plan has no table of its own - it *is* a user's meals - so the
+     * sharing relations live here, on the owner, instead of on a container
+     * model the way TaskBoard and ShoppingList do theirs.
+     *
+     * The people this user shared their own meal plan with.
+     *
+     * @return BelongsToMany<User, $this>
+     */
+    public function mealPlanMembers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'meal_plan_members', 'owner_user_id', 'member_user_id')->withTimestamps();
+    }
+
+    /**
+     * The owners of the meal plans shared with this user.
+     *
+     * @return BelongsToMany<User, $this>
+     */
+    public function sharedMealPlans(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'meal_plan_members', 'member_user_id', 'owner_user_id')->withTimestamps();
+    }
+
+    /**
+     * Everyone who plans and cooks from this user's meal plan, owner first -
+     * the list behind both the sharing panel and the cook picker.
+     *
+     * @return Collection<int, User>
+     */
+    public function mealPlanPeople(): Collection
+    {
+        return collect([$this])->concat($this->mealPlanMembers)->values();
+    }
+
+    /**
+     * Owner or invited member: the single check behind every meal action,
+     * since members are deliberately as powerful as the owner on the plan's
+     * meals (only sharing it further is owner-only).
+     */
+    public function mealPlanIsAccessibleBy(self $user): bool
+    {
+        return $this->id === $user->id
+            || $this->mealPlanMembers()->whereKey($user->id)->exists();
     }
 
     /**

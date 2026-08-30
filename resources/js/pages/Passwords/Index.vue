@@ -474,7 +474,7 @@ async function copyUsername(entry: PasswordEntry) {
                     <div
                         v-for="{ entry, group } in visibleEntries"
                         :key="entry.id"
-                        class="space-y-1.5 rounded-xl bg-muted/40 p-3"
+                        class="space-y-1.5 rounded-xl bg-muted dark:bg-muted/40 p-3"
                     >
                         <div class="flex items-center gap-2">
                             <span

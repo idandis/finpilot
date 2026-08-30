@@ -242,7 +242,7 @@ const deleteExpense = (expenseId: number) => {
             </div>
         </div>
 
-        <div v-else class="mt-8 rounded-lg border border-dashed bg-muted/30 p-8 text-center">
+        <div v-else class="mt-8 rounded-lg border border-dashed bg-muted dark:bg-muted/30 p-8 text-center">
             <p class="text-sm text-muted-foreground">
                 Nessuna spesa registrata ancora. Aggiungi la prima!
             </p>

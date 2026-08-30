@@ -14,7 +14,7 @@ class MealMoveRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return $this->route('meal')->user_id === $this->user()->id;
+        return $this->route('meal')->user->mealPlanIsAccessibleBy($this->user());
     }
 
     /**

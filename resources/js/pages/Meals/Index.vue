@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { Form, Head, router } from '@inertiajs/vue3';
+import { Form, Head, router, usePage } from '@inertiajs/vue3';
 import {
+    CalendarDays,
     ChevronLeft,
     ChevronRight,
     FileDown,
@@ -8,11 +9,14 @@ import {
     Plus,
     ShoppingCart,
     Trash2,
+    UserRound,
+    Users,
 } from '@lucide/vue';
 import { computed, reactive, ref, watch } from 'vue';
 import DishController from '@/actions/App/Http/Controllers/DishController';
 import MealController from '@/actions/App/Http/Controllers/MealController';
 import InputError from '@/components/InputError.vue';
+import SharedWith from '@/components/SharedWith.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,6 +25,12 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -29,6 +39,8 @@ import {
     SheetHeader,
     SheetTitle,
 } from '@/components/ui/sheet';
+import { getInitials } from '@/composables/useInitials';
+import { avatarStyle } from '@/lib/avatar-color';
 import * as dishRoutes from '@/routes/dishes';
 import * as mealRoutes from '@/routes/meals';
 import type {
@@ -36,12 +48,17 @@ import type {
     DishCategories,
     GroceryCategories,
     Meal,
+    MealPlan,
+    MealPlanDetail,
     MealType,
+    SharedPerson,
 } from '@/types';
 
 const props = defineProps<{
     weekStart: string;
     today: string;
+    plans: MealPlan[];
+    plan: MealPlanDetail;
     meals: Meal[];
     dishes: Dish[];
     dishCategories: DishCategories;
@@ -75,11 +92,72 @@ const previousWeekStart = computed(() => shiftDate(props.weekStart, -7));
 const nextWeekStart = computed(() => shiftDate(props.weekStart, 7));
 const isCurrentWeek = computed(() => props.weekStart === mondayOf(props.today));
 
+const page = usePage();
+
+// Every link and request carries the plan being shown, so browsing weeks,
+// exporting or adding a meal all stay on it instead of falling back to the
+// user's own.
+const planQuery = computed(() =>
+    props.plan.is_owner ? {} : { plan: props.plan.id },
+);
+
 function goToWeek(date: string) {
     router.get(
-        mealRoutes.index.url({ query: { date } }),
+        mealRoutes.index.url({ query: { date, ...planQuery.value } }),
         {},
         { preserveScroll: true },
+    );
+}
+
+function goToPlan(plan: MealPlan) {
+    router.get(
+        mealRoutes.index.url({
+            query: {
+                date: props.weekStart,
+                ...(plan.is_shared ? { plan: plan.id } : {}),
+            },
+        }),
+        {},
+        { preserveScroll: true },
+    );
+}
+
+function removeMember(person: SharedPerson) {
+    if (
+        confirm(
+            `Rimuovere ${person.name} dalla tua pianificazione? I pasti che stava cucinando restano, senza nessuno.`,
+        )
+    ) {
+        router.delete(
+            MealController.destroyMember([props.plan.id, person.id]).url,
+            { preserveScroll: true },
+        );
+    }
+}
+
+function leavePlan(person: SharedPerson) {
+    if (
+        confirm(
+            `Uscire dalla pianificazione di ${props.plan.name}? Non la vedrai più finché non ti reinvitano.`,
+        )
+    ) {
+        router.delete(
+            MealController.destroyMember([props.plan.id, person.id]).url,
+        );
+    }
+}
+
+function assignMeal(meal: Meal, personId: number | null) {
+    meal.assignee =
+        personId === null
+            ? null
+            : (props.plan.people.find((person) => person.id === personId) ??
+              null);
+
+    router.patch(
+        mealRoutes.assign(meal.id).url,
+        { assigned_to_user_id: personId },
+        { preserveScroll: true, preserveState: true },
     );
 }
 
@@ -205,6 +283,7 @@ function onDrop(date: string, type: MealType, event: DragEvent) {
                 meal_type: type,
                 category: dish.category,
                 dish_id: dish.id,
+                plan_user_id: props.plan.id,
             },
             { preserveScroll: true, preserveState: true },
         );
@@ -335,11 +414,22 @@ function closeDishDialog() {
 function generateShoppingList() {
     router.post(
         mealRoutes.generateShoppingList.url({
-            query: { date: props.weekStart },
+            query: { date: props.weekStart, ...planQuery.value },
         }),
         {},
         { preserveScroll: true },
     );
+}
+
+// null = closed, a Meal = the edit dialog for that meal. Editing covers
+// what a meal is and who cooks it; which day and slot it sits in stays
+// drag-and-drop's business.
+const editingMeal = ref<Meal | null>(null);
+const mealDescriptionForForm = ref('');
+
+function openEditMealDialog(meal: Meal) {
+    editingMeal.value = meal;
+    mealDescriptionForForm.value = meal.description ?? '';
 }
 
 const isAddMealOpen = ref(false);
@@ -365,6 +455,49 @@ function openAddDialog(
     <Head title="Pasti" />
 
     <div class="flex flex-col space-y-8 p-4">
+        <div class="flex items-center gap-2 overflow-x-auto pb-1">
+            <button
+                v-for="mealPlan in plans"
+                :key="mealPlan.id"
+                type="button"
+                class="flex max-w-[14rem] shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm transition"
+                :class="
+                    plan.id === mealPlan.id
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted text-foreground hover:bg-muted/70'
+                "
+                :title="
+                    mealPlan.is_shared
+                        ? `Pianificazione di ${mealPlan.name}`
+                        : mealPlan.name
+                "
+                @click="goToPlan(mealPlan)"
+            >
+                <component
+                    :is="mealPlan.is_shared ? Users : CalendarDays"
+                    class="size-3.5 shrink-0 opacity-70"
+                />
+                <span class="truncate">{{ mealPlan.name }}</span>
+            </button>
+
+            <SharedWith
+                class="ml-1 shrink-0"
+                :title="
+                    plan.is_owner
+                        ? 'Condividi la tua pianificazione'
+                        : `Pianificazione di ${plan.name}`
+                "
+                :people="plan.people"
+                :is-owner="plan.is_owner"
+                :current-user-id="page.props.auth.user.id"
+                :invite-form="MealController.storeMember.form()"
+                permission-hint="Deve essere già registrata sulla piattaforma. Chi entra può aggiungere, spostare ed eliminare i pasti della settimana come te, e può cucinarli."
+                leave-label="Esci dalla pianificazione"
+                @remove="removeMember"
+                @leave="leavePlan"
+            />
+        </div>
+
         <div class="flex flex-wrap items-start justify-between gap-4">
             <div class="space-y-2">
                 <div
@@ -408,7 +541,9 @@ function openAddDialog(
                 <Button variant="outline" as-child>
                     <a
                         :href="
-                            mealRoutes.pdf.url({ query: { date: weekStart } })
+                            mealRoutes.pdf.url({
+                                query: { date: weekStart, ...planQuery },
+                            })
                         "
                     >
                         <FileDown />
@@ -449,7 +584,7 @@ function openAddDialog(
                         :class="
                             day.isToday || day.isWeekend
                                 ? 'bg-primary/10'
-                                : 'bg-muted/40'
+                                : 'bg-muted dark:bg-muted/40'
                         "
                     >
                         <h3
@@ -471,7 +606,7 @@ function openAddDialog(
                                 class="flex min-h-[7rem] flex-col gap-2 rounded-lg p-2 transition-colors sm:p-3"
                                 :class="
                                     dragOverKey === slotKey(day.date, slot.type)
-                                        ? 'bg-muted/70 ring-2 ring-primary/40'
+                                        ? 'bg-primary/10 ring-2 ring-primary/40'
                                         : ''
                                 "
                                 @dragover="
@@ -519,7 +654,7 @@ function openAddDialog(
                                     )"
                                     :key="meal.id"
                                     draggable="true"
-                                    class="group flex items-start gap-2 rounded-lg px-2 py-2 text-sm select-none hover:bg-background/60"
+                                    class="group flex flex-col gap-1 rounded-lg px-2 py-2 text-sm select-none hover:bg-background/60"
                                     :class="
                                         draggingMealId === meal.id
                                             ? 'opacity-40'
@@ -528,14 +663,121 @@ function openAddDialog(
                                     @dragstart="onDragStart(meal, $event)"
                                     @dragend="onDragEnd"
                                 >
-                                    <div class="min-w-0 flex-1">
+                                    <div
+                                        class="flex items-center justify-end gap-0.5"
+                                    >
+                                        <Button
+                                            variant="ghost"
+                                            size="icon-sm"
+                                            class="size-6 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100"
+                                            title="Modifica pasto"
+                                            @click="openEditMealDialog(meal)"
+                                        >
+                                            <Pencil class="size-3.5" />
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon-sm"
+                                            class="size-6 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
+                                            title="Elimina pasto"
+                                            @click="destroyMeal(meal)"
+                                        >
+                                            <Trash2 class="size-3.5" />
+                                        </Button>
+
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger as-child>
+                                                <button
+                                                    type="button"
+                                                    class="shrink-0 rounded-full transition hover:opacity-80"
+                                                    :title="
+                                                        meal.assignee
+                                                            ? `Cucina ${meal.assignee.name}`
+                                                            : 'Nessuno ai fornelli'
+                                                    "
+                                                    @click.stop
+                                                >
+                                                    <span
+                                                        v-if="meal.assignee"
+                                                        class="flex size-6 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+                                                        :style="
+                                                            avatarStyle(
+                                                                meal.assignee
+                                                                    .name,
+                                                            )
+                                                        "
+                                                    >
+                                                        {{
+                                                            getInitials(
+                                                                meal.assignee
+                                                                    .name,
+                                                            )
+                                                        }}
+                                                    </span>
+                                                    <span
+                                                        v-else
+                                                        class="flex size-6 items-center justify-center rounded-full border border-dashed border-muted-foreground/40 text-muted-foreground opacity-0 transition group-hover:opacity-100"
+                                                    >
+                                                        <UserRound
+                                                            class="size-3"
+                                                        />
+                                                    </span>
+                                                </button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem
+                                                    @click="
+                                                        assignMeal(meal, null)
+                                                    "
+                                                >
+                                                    <span
+                                                        class="flex size-6 items-center justify-center rounded-full border border-dashed border-muted-foreground/40 text-muted-foreground"
+                                                    >
+                                                        <UserRound
+                                                            class="size-3"
+                                                        />
+                                                    </span>
+                                                    Nessuno
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                    v-for="person in plan.people"
+                                                    :key="person.id"
+                                                    @click="
+                                                        assignMeal(
+                                                            meal,
+                                                            person.id,
+                                                        )
+                                                    "
+                                                >
+                                                    <span
+                                                        class="flex size-6 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+                                                        :style="
+                                                            avatarStyle(
+                                                                person.name,
+                                                            )
+                                                        "
+                                                    >
+                                                        {{
+                                                            getInitials(
+                                                                person.name,
+                                                            )
+                                                        }}
+                                                    </span>
+                                                    {{ person.name }}
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </div>
+
+                                    <div class="min-w-0">
                                         <p
-                                            class="flex items-center gap-1.5 truncate font-medium"
+                                            class="flex items-start gap-1.5 font-medium"
+                                            :title="meal.title"
                                         >
                                             <span
-                                                class="size-2 shrink-0 rounded-full bg-primary/70"
+                                                class="mt-1.5 size-2 shrink-0 rounded-full bg-primary/70"
                                             />
-                                            <span class="truncate">{{
+                                            <span class="min-w-0 break-words">{{
                                                 meal.title
                                             }}</span>
                                         </p>
@@ -552,15 +794,6 @@ function openAddDialog(
                                             {{ meal.description }}
                                         </p>
                                     </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        class="size-6 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
-                                        title="Elimina pasto"
-                                        @click="destroyMeal(meal)"
-                                    >
-                                        <Trash2 class="size-3.5" />
-                                    </Button>
                                 </div>
 
                                 <p
@@ -615,7 +848,7 @@ function openAddDialog(
                     <div
                         v-for="group in groupedDishes"
                         :key="group.key"
-                        class="w-[17rem] shrink-0 rounded-xl bg-muted/40 p-4 sm:w-auto"
+                        class="w-[17rem] shrink-0 rounded-xl bg-muted dark:bg-muted/40 p-4 sm:w-auto"
                     >
                         <h4
                             class="mb-2 px-1 text-xs font-medium tracking-wide text-muted-foreground uppercase"
@@ -823,6 +1056,111 @@ function openAddDialog(
             </SheetContent>
         </Sheet>
 
+        <Dialog
+            :open="editingMeal !== null"
+            @update:open="
+                (open) => {
+                    if (!open) editingMeal = null;
+                }
+            "
+        >
+            <DialogContent v-if="editingMeal">
+                <DialogHeader>
+                    <DialogTitle>Modifica pasto</DialogTitle>
+                </DialogHeader>
+                <Form
+                    :key="`meal-${editingMeal.id}`"
+                    v-bind="MealController.update.form(editingMeal.id)"
+                    class="grid grid-cols-1 gap-4"
+                    v-slot="{ errors, processing }"
+                    @success="editingMeal = null"
+                >
+                    <div class="grid gap-2">
+                        <Label for="edit-meal-title">Titolo</Label>
+                        <Input
+                            id="edit-meal-title"
+                            name="title"
+                            required
+                            autofocus
+                            :default-value="editingMeal.title"
+                        />
+                        <InputError :message="errors.title" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="edit-meal-description"
+                            >Descrizione (opzionale)</Label
+                        >
+                        <textarea
+                            id="edit-meal-description"
+                            v-model="mealDescriptionForForm"
+                            name="description"
+                            rows="3"
+                            placeholder="Dettagli aggiuntivi..."
+                            class="w-full min-w-0 resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 md:text-sm dark:aria-invalid:ring-destructive/40"
+                        ></textarea>
+                        <InputError :message="errors.description" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="edit-meal-category"
+                            >Categoria (opzionale)</Label
+                        >
+                        <select
+                            id="edit-meal-category"
+                            name="category"
+                            class="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                        >
+                            <option
+                                value=""
+                                :selected="editingMeal.category === null"
+                            >
+                                Nessuna categoria
+                            </option>
+                            <option
+                                v-for="(label, key) in dishCategories"
+                                :key="key"
+                                :value="key"
+                                :selected="editingMeal.category === key"
+                            >
+                                {{ label }}
+                            </option>
+                        </select>
+                        <InputError :message="errors.category" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="edit-meal-cook"
+                            >Chi cucina (opzionale)</Label
+                        >
+                        <select
+                            id="edit-meal-cook"
+                            name="assigned_to_user_id"
+                            class="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                        >
+                            <option
+                                value=""
+                                :selected="editingMeal.assignee === null"
+                            >
+                                Nessuno
+                            </option>
+                            <option
+                                v-for="person in plan.people"
+                                :key="person.id"
+                                :value="person.id"
+                                :selected="
+                                    editingMeal.assignee?.id === person.id
+                                "
+                            >
+                                {{ person.name }}
+                            </option>
+                        </select>
+                        <InputError :message="errors.assigned_to_user_id" />
+                    </div>
+                    <Button type="submit" :disabled="processing"
+                        >Salva modifiche</Button
+                    >
+                </Form>
+            </DialogContent>
+        </Dialog>
+
         <Dialog v-model:open="isAddMealOpen">
             <DialogContent>
                 <DialogHeader>
@@ -849,6 +1187,7 @@ function openAddDialog(
                         name="meal_type"
                         :value="addMealTarget.type"
                     />
+                    <input type="hidden" name="plan_user_id" :value="plan.id" />
                     <div class="grid gap-2">
                         <Label for="title">Titolo</Label>
                         <Input
@@ -888,6 +1227,24 @@ function openAddDialog(
                             </option>
                         </select>
                         <InputError :message="errors.category" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="meal-cook">Chi cucina (opzionale)</Label>
+                        <select
+                            id="meal-cook"
+                            name="assigned_to_user_id"
+                            class="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                        >
+                            <option value="">Nessuno</option>
+                            <option
+                                v-for="person in plan.people"
+                                :key="person.id"
+                                :value="person.id"
+                            >
+                                {{ person.name }}
+                            </option>
+                        </select>
+                        <InputError :message="errors.assigned_to_user_id" />
                     </div>
                     <Button type="submit" :disabled="processing"
                         >Aggiungi pasto</Button

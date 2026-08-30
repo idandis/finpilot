@@ -444,7 +444,9 @@ class AiToolExecutor
      */
     private function taskUtente(User $user, array $arguments): array
     {
-        $query = Task::query()->where('user_id', $user->id)->orderBy('task_date');
+        // Only the Daily board: tasks on a user-created board have no day
+        // at all, which is the one thing every answer here is built on.
+        $query = Task::query()->where('user_id', $user->id)->whereNull('task_board_id')->orderBy('task_date');
 
         if (! empty($arguments['stato'])) {
             $query->where('status', $arguments['stato']);
@@ -488,10 +490,12 @@ class AiToolExecutor
      */
     private function listaDellaSpesa(User $user): array
     {
-        $lists = ShoppingList::query()
-            ->where('user_id', $user->id)
-            ->with(['items' => fn ($query) => $query->where('purchased', false)])
-            ->get();
+        $withPendingItems = ['items' => fn ($query) => $query->where('purchased', false)];
+
+        // Lists shared with the user are their shopping too, so they answer
+        // "cosa manca?" just like the ones they own.
+        $lists = $user->shoppingLists()->with($withPendingItems)->get()
+            ->concat($user->sharedShoppingLists()->with($withPendingItems)->get());
 
         return [
             'liste' => $lists
@@ -983,6 +987,7 @@ class AiToolExecutor
             }
 
             $alreadyExists = $user->tasks()
+                ->whereNull('task_board_id')
                 ->whereDate('task_date', $date)
                 ->where('title', $title)
                 ->exists();
@@ -994,6 +999,7 @@ class AiToolExecutor
             }
 
             $nextPosition = 1 + ($user->tasks()
+                ->whereNull('task_board_id')
                 ->whereDate('task_date', $date)
                 ->where('status', 'todo')
                 ->max('position') ?? -1);
@@ -1022,7 +1028,9 @@ class AiToolExecutor
      * Deletes one or more tasks by id, scoped to the user (an id belonging
      * to someone else is reported as "not found", never touched) and
      * subject to the same past-day-is-read-only rule as
-     * TaskController::destroy().
+     * TaskController::destroy(). Like every other task tool here it only
+     * ever sees the Daily board, so a task on a user-created board is
+     * reported as "not found" rather than deleted behind the user's back.
      *
      * @param  array<string, mixed>  $arguments
      * @return array<string, mixed>
@@ -1045,7 +1053,7 @@ class AiToolExecutor
                 continue;
             }
 
-            $task = Task::query()->where('user_id', $user->id)->find($id);
+            $task = Task::query()->where('user_id', $user->id)->whereNull('task_board_id')->find($id);
 
             if (! $task) {
                 $errors[] = "Task #{$id}: non trovato.";

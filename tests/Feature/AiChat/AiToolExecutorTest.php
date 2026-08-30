@@ -6,7 +6,10 @@ use App\Models\CategoryBudget;
 use App\Models\Dish;
 use App\Models\Exercise;
 use App\Models\Meal;
+use App\Models\ShoppingList;
+use App\Models\ShoppingListItem;
 use App\Models\Task;
+use App\Models\TaskBoard;
 use App\Models\TransactionCategory;
 use App\Models\User;
 use App\Models\Workout;
@@ -438,6 +441,43 @@ class AiToolExecutorTest extends TestCase
         $this->assertCount(1, $result['errori']);
         $this->assertDatabaseMissing('tasks', ['id' => $task->id]);
         $this->assertDatabaseHas('tasks', ['id' => $othersTask->id]);
+    }
+
+    public function test_lista_della_spesa_includes_lists_shared_with_the_user()
+    {
+        $user = User::factory()->create();
+        $mate = User::factory()->create();
+        $own = ShoppingList::factory()->create(['user_id' => $user->id, 'name' => 'Mia']);
+        $shared = ShoppingList::factory()->create(['user_id' => $mate->id, 'name' => 'Condivisa']);
+        $unrelated = ShoppingList::factory()->create(['user_id' => $mate->id, 'name' => 'Altrui']);
+        $shared->members()->attach($user->id);
+        ShoppingListItem::factory()->create(['shopping_list_id' => $own->id, 'name' => 'Mele', 'purchased' => false]);
+        ShoppingListItem::factory()->create(['shopping_list_id' => $shared->id, 'name' => 'Pane', 'purchased' => false]);
+        ShoppingListItem::factory()->create(['shopping_list_id' => $unrelated->id, 'name' => 'Latte', 'purchased' => false]);
+        $executor = app(AiToolExecutor::class);
+
+        $result = $executor->execute('lista_della_spesa', [], $user);
+
+        $this->assertSame(['Mia', 'Condivisa'], array_column($result['liste'], 'nome'));
+    }
+
+    public function test_task_tools_ignore_tasks_on_a_user_created_board()
+    {
+        $user = User::factory()->create();
+        $board = TaskBoard::factory()->create(['user_id' => $user->id]);
+        Task::factory()->create(['user_id' => $user->id, 'task_date' => now()->toDateString(), 'title' => 'Daily']);
+        $boardTask = Task::factory()->create(['user_id' => $user->id, 'task_board_id' => $board->id, 'task_date' => null, 'title' => 'Di board']);
+        $executor = app(AiToolExecutor::class);
+
+        $listed = $executor->execute('task_utente', [], $user);
+
+        $this->assertCount(1, $listed['task']);
+        $this->assertSame('Daily', $listed['task'][0]['titolo']);
+
+        $deleted = $executor->execute('elimina_task', ['id_task' => [$boardTask->id]], $user);
+
+        $this->assertSame(0, $deleted['eliminati']);
+        $this->assertDatabaseHas('tasks', ['id' => $boardTask->id]);
     }
 
     public function test_elimina_task_refuses_a_task_from_a_past_day()

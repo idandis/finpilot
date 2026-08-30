@@ -165,7 +165,7 @@ const deleteCategory = (category: Category) => {
 
                 <p
                     v-if="group.categories.length === 0"
-                    class="rounded-lg border border-dashed bg-muted/30 p-4 text-center text-sm text-muted-foreground"
+                    class="rounded-lg border border-dashed bg-muted dark:bg-muted/30 p-4 text-center text-sm text-muted-foreground"
                 >
                     {{ group.emptyLabel }}
                 </p>

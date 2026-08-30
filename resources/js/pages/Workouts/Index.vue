@@ -268,7 +268,7 @@ function closeAddWorkoutDialog() {
                         :class="
                             day.isToday || day.isWeekend
                                 ? 'bg-primary/10'
-                                : 'bg-muted/40'
+                                : 'bg-muted dark:bg-muted/40'
                         "
                     >
                         <div class="flex items-center justify-between px-1">
@@ -392,7 +392,7 @@ function closeAddWorkoutDialog() {
                     <div
                         v-for="group in groupedExercises"
                         :key="group.key"
-                        class="w-[17rem] shrink-0 rounded-xl bg-muted/40 p-4 sm:w-auto"
+                        class="w-[17rem] shrink-0 rounded-xl bg-muted dark:bg-muted/40 p-4 sm:w-auto"
                     >
                         <h4
                             class="mb-2 px-1 text-xs font-medium tracking-wide text-muted-foreground uppercase"

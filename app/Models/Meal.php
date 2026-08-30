@@ -11,7 +11,9 @@ use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
- * @property int $user_id
+ * @property int $user_id The plan this meal belongs to: a meal plan has no table of
+ *                        its own, it is simply a user's meals (see User::mealPlanIsAccessibleBy()).
+ * @property int|null $assigned_to_user_id Who cooks it, if anyone - one of the plan's people.
  * @property int|null $dish_id
  * @property string $title
  * @property string|null $description
@@ -22,7 +24,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['title', 'description', 'meal_date', 'meal_type', 'category', 'dish_id', 'position'])]
+#[Fillable(['assigned_to_user_id', 'title', 'description', 'meal_date', 'meal_type', 'category', 'dish_id', 'position'])]
 class Meal extends Model
 {
     /** @use HasFactory<MealFactory> */
@@ -51,6 +53,14 @@ class Meal extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function assignee(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigned_to_user_id');
     }
 
     /**

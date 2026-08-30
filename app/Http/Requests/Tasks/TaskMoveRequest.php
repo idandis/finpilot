@@ -14,7 +14,7 @@ class TaskMoveRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return $this->route('task')->user_id === $this->user()->id;
+        return $this->route('task')->isAccessibleBy($this->user());
     }
 
     /**

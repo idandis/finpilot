@@ -367,7 +367,7 @@ function closeMonth() {
                         </p>
                     </div>
 
-                    <div v-else class="mt-4 rounded-lg border border-dashed bg-muted/30 p-8 text-center">
+                    <div v-else class="mt-4 rounded-lg border border-dashed bg-muted dark:bg-muted/30 p-8 text-center">
                         <p class="text-sm text-muted-foreground">
                             Nessuna chiusura per {{ MONTHS[selectedMonth - 1].toLowerCase() }}
                             {{ selectedYear }}.

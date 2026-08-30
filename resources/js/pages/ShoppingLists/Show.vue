@@ -1,18 +1,28 @@
 <script setup lang="ts">
-import { Form, Head, router } from '@inertiajs/vue3';
+import { Form, Head, router, usePage } from '@inertiajs/vue3';
 import { Trash2 } from '@lucide/vue';
 import { computed, reactive, ref, watch } from 'vue';
+import ShoppingListController from '@/actions/App/Http/Controllers/ShoppingListController';
 import ShoppingListItemController from '@/actions/App/Http/Controllers/ShoppingListItemController';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
+import SharedWith from '@/components/SharedWith.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { groceryIcon } from '@/lib/grocery-icons';
 import * as shoppingListRoutes from '@/routes/shopping-lists';
-import type { GroceryCategories, ShoppingList, ShoppingListItem } from '@/types';
+import type { GroceryCategories, SharedPerson, ShoppingListDetail, ShoppingListItem } from '@/types';
 
 const props = defineProps<{
-    list: ShoppingList;
+    list: ShoppingListDetail;
     categories: GroceryCategories;
 }>();
 
@@ -24,6 +34,23 @@ defineOptions({
         ],
     },
 });
+
+const page = usePage();
+
+// --- Sharing: a list is shopped from by its owner plus whoever they
+// invited by email, everyone with the same powers over its products. ---
+
+function removeMember(person: SharedPerson) {
+    if (confirm(`Rimuovere ${person.name} dalla lista?`)) {
+        router.delete(ShoppingListController.destroyMember([props.list.id, person.id]).url, { preserveScroll: true });
+    }
+}
+
+function leaveList(person: SharedPerson) {
+    if (confirm(`Uscire dalla lista "${props.list.name}"? Non la vedrai più finché non ti reinvitano.`)) {
+        router.delete(ShoppingListController.destroyMember([props.list.id, person.id]).url);
+    }
+}
 
 // A local, mutable copy so drag-and-drop (and the purchased toggle) can
 // update a card instantly, before the server confirms - resynced whenever
@@ -108,12 +135,25 @@ const selectedCategory = ref(Object.keys(props.categories)[0]);
     <Head :title="list.name" />
 
     <div class="mx-auto flex w-full max-w-[64rem] flex-col space-y-6 p-4">
-        <Heading :title="list.name" description="Clicca su un prodotto per segnarlo come comprato. Trascinalo per cambiarne la categoria." />
+        <div class="flex flex-wrap items-start justify-between gap-4">
+            <Heading :title="list.name" description="Clicca su un prodotto per segnarlo come comprato. Trascinalo per cambiarne la categoria." />
+            <SharedWith
+                :title="`Condividi &quot;${list.name}&quot;`"
+                :people="list.people"
+                :is-owner="list.is_owner"
+                :current-user-id="page.props.auth.user.id"
+                :invite-form="ShoppingListController.storeMember.form(list.id)"
+                permission-hint="Deve essere già registrata sulla piattaforma. Chi entra può aggiungere, spuntare ed eliminare i prodotti della lista come te."
+                leave-label="Esci dalla lista"
+                @remove="removeMember"
+                @leave="leaveList"
+            />
+        </div>
 
         <Form
             v-bind="ShoppingListItemController.store.form(list.id)"
             reset-on-success
-            class="grid grid-cols-1 gap-4 rounded-xl bg-muted/40 p-4 sm:grid-cols-[1fr_1fr_auto]"
+            class="grid grid-cols-1 gap-4 rounded-xl bg-muted dark:bg-muted/40 p-4 sm:grid-cols-[1fr_1fr_auto]"
             v-slot="{ errors, processing }"
         >
             <div class="grid gap-2">
@@ -123,15 +163,17 @@ const selectedCategory = ref(Object.keys(props.categories)[0]);
             </div>
             <div class="grid gap-2">
                 <Label for="category">Categoria</Label>
-                <select
-                    id="category"
-                    v-model="selectedCategory"
-                    name="category"
-                    required
-                    class="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                >
-                    <option v-for="(label, key) in categories" :key="key" :value="key">{{ label }}</option>
-                </select>
+                <Select v-model="selectedCategory" name="category" required>
+                    <SelectTrigger id="category" class="w-full">
+                        <SelectValue placeholder="Scegli una categoria" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem v-for="(label, key) in categories" :key="key" :value="key">
+                            <component :is="groceryIcon(key)" class="size-4 text-muted-foreground" />
+                            {{ label }}
+                        </SelectItem>
+                    </SelectContent>
+                </Select>
                 <InputError :message="errors.category" />
             </div>
             <Button type="submit" class="self-end" :disabled="processing">Aggiungi prodotto</Button>
@@ -145,13 +187,16 @@ const selectedCategory = ref(Object.keys(props.categories)[0]);
             <div
                 v-for="group in groupedItems"
                 :key="group.key"
-                class="rounded-xl bg-muted/40 p-4 transition-colors"
-                :class="dragOverCategory === group.key ? 'bg-muted/70 ring-2 ring-primary/40' : ''"
+                class="rounded-xl bg-muted dark:bg-muted/40 p-4 transition-colors"
+                :class="dragOverCategory === group.key ? 'bg-primary/10 ring-2 ring-primary/40' : ''"
                 @dragover="onDragOver(group.key, $event)"
                 @dragleave="dragOverCategory = dragOverCategory === group.key ? null : dragOverCategory"
                 @drop="onDrop(group.key, $event)"
             >
-                <h4 class="mb-2 px-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">{{ group.label }}</h4>
+                <h4 class="mb-2 flex items-center gap-1.5 px-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                    <component :is="groceryIcon(group.key)" class="size-3.5" />
+                    {{ group.label }}
+                </h4>
                 <div class="space-y-0.5">
                     <div
                         v-for="item in group.items"

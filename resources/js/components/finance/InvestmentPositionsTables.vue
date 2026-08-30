@@ -289,7 +289,7 @@ const totalOpenRealizedGain = computed(() =>
                     </div>
                 </div>
 
-                <div class="rounded-lg border bg-muted/30 p-4">
+                <div class="rounded-lg border bg-muted dark:bg-muted/30 p-4">
                     <div class="flex items-center justify-between text-sm font-medium">
                         <span>Totale investito</span>
                         <span>{{ formatCurrency(totalOpenInvested) }}</span>

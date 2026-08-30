@@ -83,7 +83,7 @@ function renderMarkdown(content: string): string {
     html = html.replace(/\*(.*?)\*/g, '<em class="italic">$1</em>');
     html = html.replace(/_(.*?)_/g, '<em class="italic">$1</em>');
     // Handle inline code (excluding LaTeX)
-    html = html.replace(/`([^\$]*?)`/g, '<code class="bg-muted/50 px-1.5 py-0.5 rounded text-sm">$1</code>');
+    html = html.replace(/`([^\$]*?)`/g, '<code class="bg-muted dark:bg-muted/50 px-1.5 py-0.5 rounded text-sm">$1</code>');
     // Handle line breaks last
     html = html.replace(/\n/g, '<br/>');
     // Swap the rendered KaTeX markup back in
@@ -175,7 +175,7 @@ async function send(text?: string) {
             </div>
         </div>
 
-        <div v-if="messages.length === 0" class="flex flex-col items-center gap-6 rounded-xl bg-muted/40 px-6 py-12 text-center">
+        <div v-if="messages.length === 0" class="flex flex-col items-center gap-6 rounded-xl bg-muted dark:bg-muted/40 px-6 py-12 text-center">
             <div class="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <Sparkles class="size-6" />
             </div>

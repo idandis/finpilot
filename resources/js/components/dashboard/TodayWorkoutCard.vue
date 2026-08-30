@@ -11,7 +11,7 @@ defineProps<{
 </script>
 
 <template>
-    <Card class="border-none bg-muted/40 shadow-none">
+    <Card class="border-none bg-muted dark:bg-muted/40 shadow-none">
         <CardHeader>
             <CardTitle class="flex items-center gap-2 text-base">
                 <Dumbbell class="size-4 text-muted-foreground" />

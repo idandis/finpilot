@@ -5,6 +5,7 @@ import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
+import NotificationsMenu from '@/components/NotificationsMenu.vue';
 import {
     Sidebar,
     SidebarContent,
@@ -82,6 +83,7 @@ const visibleNavItems = computed<NavItem[]>(() =>
         </SidebarContent>
 
         <SidebarFooter>
+            <NotificationsMenu />
             <NavUser />
         </SidebarFooter>
     </Sidebar>

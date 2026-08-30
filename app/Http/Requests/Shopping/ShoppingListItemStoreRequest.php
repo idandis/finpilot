@@ -11,12 +11,12 @@ class ShoppingListItemStoreRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request. The item is
-     * created under the list given by the route - only its owner may add
-     * products to it.
+     * created under the list given by the route - anyone that list is
+     * shared with may add products to it.
      */
     public function authorize(): bool
     {
-        return $this->route('shoppingList')->user_id === $this->user()->id;
+        return $this->route('shoppingList')->isAccessibleBy($this->user());
     }
 
     /**

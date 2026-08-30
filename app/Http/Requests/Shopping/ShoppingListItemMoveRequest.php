@@ -14,7 +14,7 @@ class ShoppingListItemMoveRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return $this->route('shoppingListItem')->list->user_id === $this->user()->id;
+        return $this->route('shoppingListItem')->list->isAccessibleBy($this->user());
     }
 
     /**

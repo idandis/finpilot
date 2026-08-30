@@ -124,7 +124,7 @@ function removeExercise(workoutExercise: WorkoutExercise) {
             <div
                 v-for="exercise in localWorkout.exercises"
                 :key="exercise.id"
-                class="group flex flex-col gap-3 rounded-xl bg-muted/40 p-4"
+                class="group flex flex-col gap-3 rounded-xl bg-muted dark:bg-muted/40 p-4"
             >
                 <div class="flex items-start justify-between gap-2">
                     <div class="space-y-0.5">

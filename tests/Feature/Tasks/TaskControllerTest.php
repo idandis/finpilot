@@ -3,6 +3,7 @@
 namespace Tests\Feature\Tasks;
 
 use App\Models\Task;
+use App\Models\TaskBoard;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -532,6 +533,273 @@ class TaskControllerTest extends TestCase
             'task_date' => today()->toDateString(),
             'scheduled_time' => '09:00',
         ]);
+
+        $response->assertForbidden();
+    }
+
+    public function test_the_daily_board_never_shows_tasks_belonging_to_another_board()
+    {
+        $user = User::factory()->create();
+        $board = TaskBoard::factory()->create(['user_id' => $user->id]);
+        Task::factory()->create(['user_id' => $user->id, 'task_date' => today(), 'title' => 'Daily']);
+        Task::factory()->create(['user_id' => $user->id, 'task_board_id' => $board->id, 'task_date' => null, 'title' => 'Di board']);
+
+        $response = $this->actingAs($user)->get(route('tasks.index'));
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->has('tasks', 1)
+            ->where('tasks.0.title', 'Daily')
+            ->where('board', null)
+            ->has('boards', 1)
+        );
+    }
+
+    public function test_a_board_shows_only_its_own_tasks()
+    {
+        $user = User::factory()->create();
+        $board = TaskBoard::factory()->create(['user_id' => $user->id, 'name' => 'Lavoro']);
+        $otherBoard = TaskBoard::factory()->create(['user_id' => $user->id]);
+        Task::factory()->create(['user_id' => $user->id, 'task_board_id' => $board->id, 'task_date' => null, 'title' => 'Di board']);
+        Task::factory()->create(['user_id' => $user->id, 'task_board_id' => $otherBoard->id, 'task_date' => null, 'title' => 'Altra board']);
+        Task::factory()->create(['user_id' => $user->id, 'task_date' => today(), 'title' => 'Daily']);
+
+        $response = $this->actingAs($user)->get(route('tasks.index', ['board' => $board->id]));
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->has('tasks', 1)
+            ->where('tasks.0.title', 'Di board')
+            ->where('board.name', 'Lavoro')
+        );
+    }
+
+    public function test_an_unknown_or_foreign_board_falls_back_to_the_daily_one()
+    {
+        $user = User::factory()->create();
+        $foreignBoard = TaskBoard::factory()->create();
+        Task::factory()->create(['user_id' => $user->id, 'task_date' => today(), 'title' => 'Daily']);
+
+        foreach (['nope', 999999, $foreignBoard->id] as $requested) {
+            $response = $this->actingAs($user)->get(route('tasks.index', ['board' => $requested]));
+
+            $response->assertOk();
+            $response->assertInertia(fn ($page) => $page
+                ->where('board', null)
+                ->has('tasks', 1)
+                ->where('tasks.0.title', 'Daily')
+            );
+        }
+    }
+
+    public function test_a_task_created_on_a_board_has_no_date_and_is_appended_to_that_board()
+    {
+        $user = User::factory()->create();
+        $board = TaskBoard::factory()->create(['user_id' => $user->id]);
+        Task::factory()->create(['user_id' => $user->id, 'task_board_id' => $board->id, 'task_date' => null, 'status' => 'todo', 'position' => 4]);
+
+        $this->actingAs($user)->post(route('tasks.store'), ['title' => 'Nuovo', 'task_board_id' => $board->id]);
+
+        $task = Task::query()->where('title', 'Nuovo')->sole();
+        $this->assertSame($board->id, $task->task_board_id);
+        $this->assertNull($task->task_date);
+        $this->assertSame(5, $task->position);
+    }
+
+    public function test_a_task_cannot_be_created_on_a_board_belonging_to_someone_else()
+    {
+        $user = User::factory()->create();
+        $foreignBoard = TaskBoard::factory()->create();
+
+        $response = $this->actingAs($user)->post(route('tasks.store'), ['title' => 'Nuovo', 'task_board_id' => $foreignBoard->id]);
+
+        $response->assertSessionHasErrors('task_board_id');
+        $this->assertDatabaseCount('tasks', 0);
+    }
+
+    public function test_positions_on_a_board_are_independent_from_the_daily_board()
+    {
+        $user = User::factory()->create();
+        $board = TaskBoard::factory()->create(['user_id' => $user->id]);
+        Task::factory()->create(['user_id' => $user->id, 'task_date' => today(), 'status' => 'todo', 'position' => 7]);
+
+        $this->actingAs($user)->post(route('tasks.store'), ['title' => 'Primo della board', 'task_board_id' => $board->id]);
+
+        $this->assertSame(0, Task::query()->where('title', 'Primo della board')->sole()->position);
+    }
+
+    public function test_a_board_task_can_be_edited_moved_and_deleted_without_any_day_rule()
+    {
+        $user = User::factory()->create();
+        $board = TaskBoard::factory()->create(['user_id' => $user->id]);
+        $task = Task::factory()->create(['user_id' => $user->id, 'task_board_id' => $board->id, 'task_date' => null, 'status' => 'todo', 'position' => 0]);
+
+        $this->actingAs($user)->patch(route('tasks.update', $task), ['title' => 'Rinominato', 'description' => null]);
+        $this->assertSame('Rinominato', $task->fresh()->title);
+
+        $this->actingAs($user)->patch(route('tasks.move', $task), ['status' => 'done', 'position' => 0]);
+        $this->assertSame('done', $task->fresh()->status);
+
+        $this->actingAs($user)->delete(route('tasks.destroy', $task));
+        $this->assertDatabaseMissing('tasks', ['id' => $task->id]);
+    }
+
+    public function test_moving_a_board_task_only_reindexes_its_own_board()
+    {
+        $user = User::factory()->create();
+        $board = TaskBoard::factory()->create(['user_id' => $user->id]);
+        $first = Task::factory()->create(['user_id' => $user->id, 'task_board_id' => $board->id, 'task_date' => null, 'status' => 'todo', 'position' => 0]);
+        $second = Task::factory()->create(['user_id' => $user->id, 'task_board_id' => $board->id, 'task_date' => null, 'status' => 'todo', 'position' => 1]);
+        $daily = Task::factory()->create(['user_id' => $user->id, 'task_date' => today(), 'status' => 'todo', 'position' => 0]);
+
+        $this->actingAs($user)->patch(route('tasks.move', $second), ['status' => 'todo', 'position' => 0]);
+
+        $this->assertSame(0, $second->fresh()->position);
+        $this->assertSame(1, $first->fresh()->position);
+        $this->assertSame(0, $daily->fresh()->position);
+    }
+
+    public function test_a_board_task_cannot_be_rescheduled_to_a_day()
+    {
+        $user = User::factory()->create();
+        $board = TaskBoard::factory()->create(['user_id' => $user->id]);
+        $task = Task::factory()->create(['user_id' => $user->id, 'task_board_id' => $board->id, 'task_date' => null]);
+
+        $response = $this->actingAs($user)->patch(route('tasks.reschedule', $task), ['task_date' => today()->addDay()->toDateString()]);
+
+        $response->assertForbidden();
+        $this->assertNull($task->fresh()->task_date);
+    }
+
+    public function test_a_board_task_cannot_be_dropped_onto_the_calendar()
+    {
+        $user = User::factory()->create();
+        $board = TaskBoard::factory()->create(['user_id' => $user->id]);
+        $task = Task::factory()->create(['user_id' => $user->id, 'task_board_id' => $board->id, 'task_date' => null]);
+
+        $response = $this->actingAs($user)->patch(route('tasks.schedule', $task), [
+            'task_date' => today()->toDateString(),
+            'scheduled_time' => '10:00',
+        ]);
+
+        $response->assertForbidden();
+    }
+
+    public function test_a_member_sees_and_can_work_on_every_task_of_a_shared_board()
+    {
+        $owner = User::factory()->create();
+        $mate = User::factory()->create();
+        $board = TaskBoard::factory()->create(['user_id' => $owner->id, 'name' => 'Lavoro']);
+        $board->members()->attach($mate->id);
+        $ownersTask = Task::factory()->create(['user_id' => $owner->id, 'task_board_id' => $board->id, 'task_date' => null, 'title' => "Dell'owner", 'status' => 'todo', 'position' => 0]);
+
+        $response = $this->actingAs($mate)->get(route('tasks.index', ['board' => $board->id]));
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->has('tasks', 1)
+            ->where('tasks.0.title', "Dell'owner")
+            ->where('board.is_owner', false)
+            ->has('board.people', 2)
+        );
+
+        $this->actingAs($mate)->patch(route('tasks.update', $ownersTask), ['title' => 'Modificato', 'description' => null]);
+        $this->assertSame('Modificato', $ownersTask->fresh()->title);
+
+        $this->actingAs($mate)->patch(route('tasks.move', $ownersTask), ['status' => 'in_progress', 'position' => 0]);
+        $this->assertSame('in_progress', $ownersTask->fresh()->status);
+
+        $this->actingAs($mate)->delete(route('tasks.destroy', $ownersTask));
+        $this->assertDatabaseMissing('tasks', ['id' => $ownersTask->id]);
+    }
+
+    public function test_a_member_can_create_a_task_on_a_shared_board_appended_after_everyone_elses()
+    {
+        $owner = User::factory()->create();
+        $mate = User::factory()->create();
+        $board = TaskBoard::factory()->create(['user_id' => $owner->id]);
+        $board->members()->attach($mate->id);
+        Task::factory()->create(['user_id' => $owner->id, 'task_board_id' => $board->id, 'task_date' => null, 'status' => 'todo', 'position' => 0]);
+
+        $this->actingAs($mate)->post(route('tasks.store'), ['title' => 'Del membro', 'task_board_id' => $board->id]);
+
+        $task = Task::query()->where('title', 'Del membro')->sole();
+        $this->assertSame($mate->id, $task->user_id);
+        $this->assertSame($board->id, $task->task_board_id);
+        $this->assertSame(1, $task->position);
+    }
+
+    public function test_a_board_that_is_not_shared_with_the_user_is_out_of_reach()
+    {
+        $owner = User::factory()->create();
+        $stranger = User::factory()->create();
+        $board = TaskBoard::factory()->create(['user_id' => $owner->id]);
+        $task = Task::factory()->create(['user_id' => $owner->id, 'task_board_id' => $board->id, 'task_date' => null]);
+
+        $this->actingAs($stranger)->get(route('tasks.index', ['board' => $board->id]))
+            ->assertInertia(fn ($page) => $page->where('board', null)->has('tasks', 0));
+
+        $this->actingAs($stranger)->post(route('tasks.store'), ['title' => 'Intruso', 'task_board_id' => $board->id])
+            ->assertSessionHasErrors('task_board_id');
+        $this->actingAs($stranger)->patch(route('tasks.update', $task), ['title' => 'Intruso', 'description' => null])
+            ->assertForbidden();
+        $this->actingAs($stranger)->delete(route('tasks.destroy', $task))
+            ->assertForbidden();
+    }
+
+    public function test_a_task_can_be_assigned_to_anyone_on_its_board_and_unassigned()
+    {
+        $owner = User::factory()->create();
+        $mate = User::factory()->create(['name' => 'Nicolas Picco']);
+        $board = TaskBoard::factory()->create(['user_id' => $owner->id]);
+        $board->members()->attach($mate->id);
+        $task = Task::factory()->create(['user_id' => $owner->id, 'task_board_id' => $board->id, 'task_date' => null]);
+
+        $this->actingAs($mate)->patch(route('tasks.assign', $task), ['assigned_to_user_id' => $mate->id]);
+        $this->assertSame($mate->id, $task->fresh()->assigned_to_user_id);
+
+        $this->actingAs($owner)->get(route('tasks.index', ['board' => $board->id]))
+            ->assertInertia(fn ($page) => $page->where('tasks.0.assignee.name', 'Nicolas Picco'));
+
+        $this->actingAs($owner)->patch(route('tasks.assign', $task), ['assigned_to_user_id' => null]);
+        $this->assertNull($task->fresh()->assigned_to_user_id);
+    }
+
+    public function test_a_task_cannot_be_assigned_to_someone_outside_its_board()
+    {
+        $owner = User::factory()->create();
+        $stranger = User::factory()->create();
+        $board = TaskBoard::factory()->create(['user_id' => $owner->id]);
+        $task = Task::factory()->create(['user_id' => $owner->id, 'task_board_id' => $board->id, 'task_date' => null]);
+
+        $response = $this->actingAs($owner)->patch(route('tasks.assign', $task), ['assigned_to_user_id' => $stranger->id]);
+
+        $response->assertSessionHasErrors('assigned_to_user_id');
+        $this->assertNull($task->fresh()->assigned_to_user_id);
+    }
+
+    public function test_a_task_created_with_an_assignee_keeps_it()
+    {
+        $owner = User::factory()->create();
+        $mate = User::factory()->create();
+        $board = TaskBoard::factory()->create(['user_id' => $owner->id]);
+        $board->members()->attach($mate->id);
+
+        $this->actingAs($owner)->post(route('tasks.store'), [
+            'title' => 'Assegnato subito',
+            'task_board_id' => $board->id,
+            'assigned_to_user_id' => $mate->id,
+        ]);
+
+        $this->assertSame($mate->id, Task::query()->where('title', 'Assegnato subito')->sole()->assigned_to_user_id);
+    }
+
+    public function test_a_daily_task_cannot_be_assigned()
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => $user->id, 'task_date' => today()]);
+
+        $response = $this->actingAs($user)->patch(route('tasks.assign', $task), ['assigned_to_user_id' => null]);
 
         $response->assertForbidden();
     }

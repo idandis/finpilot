@@ -153,7 +153,7 @@ function formatDate(value: string) {
 
             <TabsContent value="macro" class="space-y-8 pt-6">
                 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    <div class="space-y-3 rounded-lg bg-muted/40 p-4">
+                    <div class="space-y-3 rounded-lg bg-muted dark:bg-muted/40 p-4">
                         <div>
                             <p class="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                                 Regime economico (USA)
@@ -183,7 +183,7 @@ function formatDate(value: string) {
                         </ul>
                     </div>
 
-                    <div class="space-y-3 rounded-lg bg-muted/40 p-4">
+                    <div class="space-y-3 rounded-lg bg-muted dark:bg-muted/40 p-4">
                         <div>
                             <p class="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                                 Condizione di mercato
@@ -208,7 +208,7 @@ function formatDate(value: string) {
                         </p>
                     </div>
 
-                    <div class="space-y-3 rounded-lg bg-muted/40 p-4">
+                    <div class="space-y-3 rounded-lg bg-muted dark:bg-muted/40 p-4">
                         <div>
                             <p class="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                                 Sentiment di mercato
@@ -255,7 +255,7 @@ function formatDate(value: string) {
                         <div
                             v-for="indicator in category.indicators"
                             :key="indicator.key"
-                            class="space-y-3 rounded-lg bg-muted/40 p-4"
+                            class="space-y-3 rounded-lg bg-muted dark:bg-muted/40 p-4"
                         >
                             <div class="flex items-start justify-between gap-2">
                                 <div class="min-w-0">

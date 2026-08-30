@@ -11,6 +11,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('shopping-lists/{shoppingList}', [ShoppingListController::class, 'update'])->name('shopping-lists.update');
     Route::delete('shopping-lists/{shoppingList}', [ShoppingListController::class, 'destroy'])->name('shopping-lists.destroy');
 
+    Route::post('shopping-lists/{shoppingList}/members', [ShoppingListController::class, 'storeMember'])->name('shopping-lists.members.store');
+    Route::delete('shopping-lists/{shoppingList}/members/{user}', [ShoppingListController::class, 'destroyMember'])->name('shopping-lists.members.destroy');
+
     Route::post('shopping-lists/{shoppingList}/items', [ShoppingListItemController::class, 'store'])->name('shopping-list-items.store');
     Route::patch('shopping-list-items/{shoppingListItem}/move', [ShoppingListItemController::class, 'move'])->name('shopping-list-items.move');
     Route::patch('shopping-list-items/{shoppingListItem}/toggle', [ShoppingListItemController::class, 'toggle'])->name('shopping-list-items.toggle');

@@ -1,27 +1,27 @@
 <script setup lang="ts">
-import { Form, Head, router } from '@inertiajs/vue3';
-import {
-    ChevronLeft,
-    ChevronRight,
-    ChevronsRight,
-    GripVertical,
-    Plus,
-    Trash2,
-} from '@lucide/vue';
+import { Form, Head, router, usePage } from '@inertiajs/vue3';
+import { CalendarDays, ChevronLeft, ChevronRight, ChevronsRight, GripVertical, Pencil, Plus, Trash2, UserRound, Users } from '@lucide/vue';
 import { computed, reactive, ref, watch } from 'vue';
+import TaskBoardController from '@/actions/App/Http/Controllers/TaskBoardController';
 import TaskController from '@/actions/App/Http/Controllers/TaskController';
 import InputError from '@/components/InputError.vue';
+import SharedWith from '@/components/SharedWith.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { getInitials } from '@/composables/useInitials';
+import { avatarStyle } from '@/lib/avatar-color';
 import * as taskRoutes from '@/routes/tasks';
-import type { Task, TaskStatus } from '@/types';
+import type { SharedPerson, Task, TaskBoard, TaskBoardDetail, TaskStatus } from '@/types';
 
 const props = defineProps<{
     date: string;
     today: string;
+    boards: TaskBoard[];
+    board: TaskBoardDetail | null;
     tasks: Task[];
 }>();
 
@@ -31,12 +31,24 @@ defineOptions({
     },
 });
 
+const page = usePage();
+
 const formattedDate = computed(() =>
-    new Intl.DateTimeFormat('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(`${props.date}T00:00:00`)),
+    new Intl.DateTimeFormat('it-IT', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+    }).format(new Date(`${props.date}T00:00:00`)),
 );
 
+// The Daily board (board === null) is the day-by-day one: it navigates
+// through days and locks the past. A user-created board has no day at all,
+// so none of that applies to it - its tasks stay editable forever.
+const isDaily = computed(() => props.board === null);
+
 const isToday = computed(() => props.date === props.today);
-const isPast = computed(() => props.date < props.today);
+const isPast = computed(() => isDaily.value && props.date < props.today);
 
 // Calendar-day arithmetic done at UTC midnight so it never drifts a day off
 // because of the browser's local timezone/DST.
@@ -52,6 +64,52 @@ const nextDate = computed(() => shiftDate(props.date, 1));
 
 function goToDate(date: string) {
     router.get(taskRoutes.index.url({ query: { date } }), {}, { preserveScroll: true });
+}
+
+function goToBoard(board: TaskBoard | null) {
+    router.get(taskRoutes.index.url({ query: board ? { board: board.id } : {} }), {}, { preserveScroll: true });
+}
+
+const isAddBoardOpen = ref(false);
+const isRenameBoardOpen = ref(false);
+
+function destroyBoard(board: TaskBoardDetail, event?: Event) {
+    event?.stopPropagation();
+
+    if (confirm(`Eliminare la board "${board.name}"? Verranno eliminati anche tutti i task al suo interno.`)) {
+        router.delete(TaskBoardController.destroy(board.id).url, {
+            preserveScroll: true,
+        });
+    }
+}
+
+// --- Sharing: a board is worked on by its owner plus whoever they invited
+// by email, everyone with the same powers over its tasks (see SharedWith). ---
+
+function removeMember(person: SharedPerson) {
+    if (!props.board) {
+        return;
+    }
+
+    if (confirm(`Rimuovere ${person.name} dalla board? I task che aveva assegnati restano, senza assegnatario.`)) {
+        router.delete(TaskBoardController.destroyMember([props.board.id, person.id]).url, { preserveScroll: true });
+    }
+}
+
+function leaveBoard(person: SharedPerson) {
+    if (!props.board) {
+        return;
+    }
+
+    if (confirm(`Uscire dalla board "${props.board.name}"? Non la vedrai più finché non ti reinvitano.`)) {
+        router.delete(TaskBoardController.destroyMember([props.board.id, person.id]).url);
+    }
+}
+
+function assignTask(task: Task, personId: number | null) {
+    task.assignee = personId === null ? null : (props.board?.people.find((person) => person.id === personId) ?? null);
+
+    router.patch(taskRoutes.assign(task.id).url, { assigned_to_user_id: personId }, { preserveScroll: true, preserveState: true });
 }
 
 // A local, mutable copy so drag-and-drop can move a card between columns
@@ -125,11 +183,7 @@ function moveTask(taskId: number, status: TaskStatus, targetIndex: number) {
         candidate.position = index;
     });
 
-    router.patch(
-        taskRoutes.move(taskId).url,
-        { status, position: insertIndex },
-        { preserveScroll: true, preserveState: true },
-    );
+    router.patch(taskRoutes.move(taskId).url, { status, position: insertIndex }, { preserveScroll: true, preserveState: true });
 }
 
 function onDrop(status: TaskStatus, event: DragEvent) {
@@ -187,7 +241,9 @@ function destroyTask(task: Task, event: Event) {
     event.stopPropagation();
 
     if (!isPast.value && confirm(`Eliminare il task "${task.title}"?`)) {
-        router.delete(taskRoutes.destroy(task.id).url, { preserveScroll: true });
+        router.delete(taskRoutes.destroy(task.id).url, {
+            preserveScroll: true,
+        });
     }
 }
 
@@ -228,10 +284,39 @@ function closeEditTaskDialog() {
 <template>
     <Head title="Task" />
 
-    <div class="flex flex-col space-y-6 p-4 md:flex-1 md:min-h-0">
+    <div class="flex flex-col space-y-6 p-4 md:min-h-0 md:flex-1">
+        <div class="flex items-center gap-2 overflow-x-auto pb-1">
+            <button
+                type="button"
+                class="flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm transition"
+                :class="isDaily ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground hover:bg-muted/70'"
+                @click="goToBoard(null)"
+            >
+                <CalendarDays class="size-4" />
+                Daily
+            </button>
+
+            <button
+                v-for="taskBoard in boards"
+                :key="taskBoard.id"
+                type="button"
+                class="flex max-w-[14rem] shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm transition"
+                :class="board?.id === taskBoard.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground hover:bg-muted/70'"
+                :title="taskBoard.is_shared ? `${taskBoard.name} - condivisa con te` : taskBoard.name"
+                @click="goToBoard(taskBoard)"
+            >
+                <Users v-if="taskBoard.is_shared" class="size-3.5 shrink-0 opacity-70" />
+                <span class="truncate">{{ taskBoard.name }}</span>
+            </button>
+
+            <Button variant="outline" size="icon-sm" class="shrink-0 rounded-full" title="Nuova board" @click="isAddBoardOpen = true">
+                <Plus />
+            </Button>
+        </div>
+
         <div class="flex flex-wrap items-start justify-between gap-4">
             <div class="space-y-0.5">
-                <div class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                <div v-if="isDaily" class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                     <Button variant="outline" size="icon-sm" title="Giorno precedente" @click="goToDate(previousDate)">
                         <ChevronLeft />
                     </Button>
@@ -241,6 +326,40 @@ function closeEditTaskDialog() {
                     </Button>
                     <Button v-if="!isToday" variant="ghost" size="sm" @click="goToDate(today)">Torna a oggi</Button>
                 </div>
+                <div v-else-if="board" class="flex flex-wrap items-center gap-2">
+                    <h2 class="text-base font-medium">{{ board.name }}</h2>
+                    <template v-if="board.is_owner">
+                        <Button variant="ghost" size="icon-sm" class="text-muted-foreground" title="Rinomina board" @click="isRenameBoardOpen = true">
+                            <Pencil />
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            title="Elimina board"
+                            @click="destroyBoard(board)"
+                        >
+                            <Trash2 />
+                        </Button>
+                    </template>
+                    <Badge v-else variant="secondary" class="gap-1">
+                        <Users class="size-3" />
+                        Condivisa con te
+                    </Badge>
+
+                    <SharedWith
+                        class="ml-1"
+                        :title="`Condividi &quot;${board.name}&quot;`"
+                        :people="board.people"
+                        :is-owner="board.is_owner"
+                        :current-user-id="page.props.auth.user.id"
+                        :invite-form="TaskBoardController.storeMember.form(board.id)"
+                        permission-hint="Deve essere già registrata sulla piattaforma. Chi entra può creare, spostare ed eliminare i task della board come te."
+                        leave-label="Esci dalla board"
+                        @remove="removeMember"
+                        @leave="leaveBoard"
+                    />
+                </div>
             </div>
             <Button v-if="!isPast" class="shrink-0" @click="isAddTaskOpen = true">
                 <Plus />
@@ -249,10 +368,57 @@ function closeEditTaskDialog() {
             <Badge v-else variant="secondary" class="shrink-0">Sola lettura</Badge>
         </div>
 
+        <Dialog v-model:open="isAddBoardOpen">
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Nuova board</DialogTitle>
+                </DialogHeader>
+                <Form
+                    v-bind="TaskBoardController.store.form()"
+                    reset-on-success
+                    class="grid grid-cols-1 gap-4"
+                    v-slot="{ errors, processing }"
+                    @success="isAddBoardOpen = false"
+                >
+                    <div class="grid gap-2">
+                        <Label for="board-name">Nome</Label>
+                        <Input id="board-name" name="name" placeholder="Es. Lavoro" required autofocus />
+                        <InputError :message="errors.name" />
+                        <p class="text-xs text-muted-foreground">
+                            Una board libera: i suoi task non hanno una data e restano lì finché non li sposti o elimini.
+                        </p>
+                    </div>
+                    <Button type="submit" :disabled="processing">Crea board</Button>
+                </Form>
+            </DialogContent>
+        </Dialog>
+
+        <Dialog v-if="board" v-model:open="isRenameBoardOpen">
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Rinomina board</DialogTitle>
+                </DialogHeader>
+                <Form
+                    :key="`board-${board.id}`"
+                    v-bind="TaskBoardController.update.form(board.id)"
+                    class="grid grid-cols-1 gap-4"
+                    v-slot="{ errors, processing }"
+                    @success="isRenameBoardOpen = false"
+                >
+                    <div class="grid gap-2">
+                        <Label for="rename-board-name">Nome</Label>
+                        <Input id="rename-board-name" name="name" required autofocus :default-value="board.name" />
+                        <InputError :message="errors.name" />
+                    </div>
+                    <Button type="submit" :disabled="processing">Salva</Button>
+                </Form>
+            </DialogContent>
+        </Dialog>
+
         <Dialog v-model:open="isAddTaskOpen">
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Nuovo task</DialogTitle>
+                    <DialogTitle>Nuovo task{{ board ? ` in "${board.name}"` : '' }}</DialogTitle>
                 </DialogHeader>
                 <Form
                     v-bind="TaskController.store.form()"
@@ -261,7 +427,8 @@ function closeEditTaskDialog() {
                     v-slot="{ errors, processing }"
                     @success="isAddTaskOpen = false"
                 >
-                    <input type="hidden" name="task_date" :value="date" />
+                    <input v-if="board" type="hidden" name="task_board_id" :value="board.id" />
+                    <input v-else type="hidden" name="task_date" :value="date" />
                     <div class="grid gap-2">
                         <Label for="title">Titolo</Label>
                         <Input id="title" name="title" placeholder="Es. Rispondere alle email" required autofocus />
@@ -274,11 +441,25 @@ function closeEditTaskDialog() {
                             name="description"
                             rows="3"
                             placeholder="Dettagli aggiuntivi..."
-                            class="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive w-full min-w-0 resize-y rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] md:text-sm"
+                            class="w-full min-w-0 resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 md:text-sm dark:aria-invalid:ring-destructive/40"
                         ></textarea>
                         <InputError :message="errors.description" />
                     </div>
-                    <Button type="submit" :disabled="processing">Aggiungi task{{ isToday ? '' : ` per ${formattedDate}` }}</Button>
+                    <div v-if="board" class="grid gap-2">
+                        <Label for="assignee">Assegnato a</Label>
+                        <select
+                            id="assignee"
+                            name="assigned_to_user_id"
+                            class="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                        >
+                            <option value="">Non assegnato</option>
+                            <option v-for="person in board.people" :key="person.id" :value="person.id">
+                                {{ person.name }}
+                            </option>
+                        </select>
+                        <InputError :message="errors.assigned_to_user_id" />
+                    </div>
+                    <Button type="submit" :disabled="processing">Aggiungi task{{ isDaily && !isToday ? ` per ${formattedDate}` : '' }}</Button>
                 </Form>
             </DialogContent>
         </Dialog>
@@ -305,13 +486,7 @@ function closeEditTaskDialog() {
                 >
                     <div class="grid gap-2">
                         <Label for="edit-title">Titolo</Label>
-                        <Input
-                            id="edit-title"
-                            name="title"
-                            required
-                            autofocus
-                            :default-value="editingTask.title"
-                        />
+                        <Input id="edit-title" name="title" required autofocus :default-value="editingTask.title" />
                         <InputError :message="errors.title" />
                     </div>
                     <div class="grid gap-2">
@@ -321,7 +496,7 @@ function closeEditTaskDialog() {
                             name="description"
                             rows="3"
                             placeholder="Dettagli aggiuntivi..."
-                            class="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive w-full min-w-0 resize-y rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] md:text-sm"
+                            class="w-full min-w-0 resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 md:text-sm dark:aria-invalid:ring-destructive/40"
                             :value="editingTask.description ?? ''"
                         ></textarea>
                         <InputError :message="errors.description" />
@@ -361,12 +536,12 @@ function closeEditTaskDialog() {
             </DialogContent>
         </Dialog>
 
-        <div class="grid grid-cols-1 gap-4 md:grid-cols-3 md:flex-1 md:min-h-0">
+        <div class="grid grid-cols-1 gap-4 md:min-h-0 md:flex-1 md:grid-cols-3">
             <div
                 v-for="column in columns"
                 :key="column.status"
-                class="flex min-h-[16rem] flex-col gap-3 rounded-lg border bg-muted/30 p-3 transition-colors"
-                :class="dragOverStatus === column.status ? 'border-primary bg-muted/60' : ''"
+                class="flex min-h-[16rem] flex-col gap-3 rounded-lg border bg-muted dark:bg-muted/50 p-3 transition-colors"
+                :class="dragOverStatus === column.status ? 'border-primary bg-primary/10' : ''"
                 @dragover="onDragOver(column.status, $event)"
                 @dragleave="dragOverStatus = dragOverStatus === column.status ? null : dragOverStatus"
                 @drop="onDrop(column.status, $event)"
@@ -376,7 +551,10 @@ function closeEditTaskDialog() {
                     <Badge variant="secondary">{{ column.tasks.length }}</Badge>
                 </div>
 
-                <div v-if="column.tasks.length === 0" class="flex flex-1 items-center justify-center rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
+                <div
+                    v-if="column.tasks.length === 0"
+                    class="flex flex-1 items-center justify-center rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground"
+                >
                     Nessun task
                 </div>
 
@@ -402,13 +580,60 @@ function closeEditTaskDialog() {
                 >
                     <GripVertical v-if="!isPast" class="mt-0.5 size-4 shrink-0 cursor-grab text-muted-foreground" />
                     <div class="min-w-0 flex-1">
-                        <p class="truncate text-sm font-medium">{{ task.title }}</p>
+                        <p class="truncate text-sm font-medium">
+                            {{ task.title }}
+                        </p>
                         <p v-if="task.description" class="mt-1 line-clamp-3 text-xs whitespace-pre-line text-muted-foreground">
                             {{ task.description }}
                         </p>
                     </div>
+                    <DropdownMenu v-if="board">
+                        <DropdownMenuTrigger as-child>
+                            <button
+                                type="button"
+                                class="shrink-0 rounded-full transition hover:opacity-80"
+                                :title="task.assignee ? `Assegnato a ${task.assignee.name}` : 'Non assegnato'"
+                                @click.stop
+                            >
+                                <span
+                                    v-if="task.assignee"
+                                    class="flex size-7 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+                                    :style="avatarStyle(task.assignee.name)"
+                                >
+                                    {{ getInitials(task.assignee.name) }}
+                                </span>
+                                <span
+                                    v-else
+                                    class="flex size-7 items-center justify-center rounded-full border border-dashed border-muted-foreground/40 text-muted-foreground"
+                                >
+                                    <UserRound class="size-3.5" />
+                                </span>
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem @click="assignTask(task, null)">
+                                <span
+                                    class="flex size-6 items-center justify-center rounded-full border border-dashed border-muted-foreground/40 text-muted-foreground"
+                                >
+                                    <UserRound class="size-3" />
+                                </span>
+                                Non assegnato
+                            </DropdownMenuItem>
+                            <DropdownMenuItem v-for="person in board.people" :key="person.id" @click="assignTask(task, person.id)">
+                                <span
+                                    class="flex size-6 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+                                    :style="avatarStyle(person.name)"
+                                >
+                                    {{ getInitials(person.name) }}
+                                </span>
+                                {{ person.name }}
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+
                     <div class="flex shrink-0 gap-0.5 opacity-0 group-hover:opacity-100">
                         <Button
+                            v-if="isDaily"
                             variant="ghost"
                             size="icon-sm"
                             class="text-muted-foreground hover:bg-muted"
@@ -418,7 +643,7 @@ function closeEditTaskDialog() {
                             <ChevronsRight />
                         </Button>
                         <Button
-                            v-if="isToday"
+                            v-if="!isDaily || isToday"
                             variant="ghost"
                             size="icon-sm"
                             class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"

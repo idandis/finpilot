@@ -56,6 +56,10 @@
             text-transform: uppercase;
             color: #6b7280;
         }
+        .meal-cook {
+            font-size: 10px;
+            color: #4b5563;
+        }
         .meal-description {
             font-size: 10px;
             color: #4b5563;
@@ -85,6 +89,9 @@
                                 @if ($meal->category)
                                     <div class="meal-category">{{ $dishCategories[$meal->category] ?? $meal->category }}</div>
                                 @endif
+                                @if ($meal->assignee)
+                                    <div class="meal-cook">Cucina {{ $meal->assignee->name }}</div>
+                                @endif
                                 @if ($meal->description)
                                     <div class="meal-description">{{ $meal->description }}</div>
                                 @endif
@@ -100,6 +107,9 @@
                                 <div class="meal-title">{{ $meal->title }}</div>
                                 @if ($meal->category)
                                     <div class="meal-category">{{ $dishCategories[$meal->category] ?? $meal->category }}</div>
+                                @endif
+                                @if ($meal->assignee)
+                                    <div class="meal-cook">Cucina {{ $meal->assignee->name }}</div>
                                 @endif
                                 @if ($meal->description)
                                     <div class="meal-description">{{ $meal->description }}</div>

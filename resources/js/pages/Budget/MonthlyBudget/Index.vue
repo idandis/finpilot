@@ -641,7 +641,7 @@ const transactionDays = computed(() => {
         <!-- Riepilogo del mese -->
         <div class="space-y-4">
             <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                <div class="rounded-lg bg-muted/50 p-3">
+                <div class="rounded-lg bg-muted dark:bg-muted/50 p-3">
                     <p class="text-xs text-muted-foreground">Entrate</p>
                     <p class="text-lg font-bold">{{ formatCurrency(incomeActual) }}</p>
                     <p class="text-xs text-muted-foreground">incassate</p>
@@ -650,7 +650,7 @@ const transactionDays = computed(() => {
                         <span class="font-medium tabular-nums">{{ formatCurrency(incomePlanned) }}</span>
                     </div>
                 </div>
-                <div class="rounded-lg bg-muted/50 p-3">
+                <div class="rounded-lg bg-muted dark:bg-muted/50 p-3">
                     <p class="text-xs text-muted-foreground">Uscite</p>
                     <p class="text-lg font-bold">{{ formatCurrency(expenseActual) }}</p>
                     <p class="text-xs text-muted-foreground">spese</p>
@@ -659,7 +659,7 @@ const transactionDays = computed(() => {
                         <span class="font-medium tabular-nums">{{ formatCurrency(expensePlanned) }}</span>
                     </div>
                 </div>
-                <div class="col-span-2 rounded-lg bg-muted/50 p-3 sm:col-span-1">
+                <div class="col-span-2 rounded-lg bg-muted dark:bg-muted/50 p-3 sm:col-span-1">
                     <p class="text-xs text-muted-foreground">Saldo del mese</p>
                     <p
                         class="text-lg font-bold"
@@ -743,7 +743,7 @@ const transactionDays = computed(() => {
                 />
             </div>
 
-            <div v-else class="rounded-xl border border-dashed bg-muted/30 p-6 text-center">
+            <div v-else class="rounded-xl border border-dashed bg-muted dark:bg-muted/30 p-6 text-center">
                 <p class="text-sm text-muted-foreground">{{ section.emptyLabel }}</p>
             </div>
         </section>
@@ -798,7 +798,7 @@ const transactionDays = computed(() => {
 
             <div v-if="transactionDays.length" class="divide-y">
                 <div v-for="day in transactionDays" :key="day.label">
-                    <div class="flex items-center justify-between gap-4 bg-muted/40 px-5 py-2">
+                    <div class="flex items-center justify-between gap-4 bg-muted px-5 py-2 dark:bg-muted/40">
                         <span class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                             {{ day.label }}
                         </span>
@@ -976,7 +976,7 @@ const transactionDays = computed(() => {
             </DialogHeader>
 
             <div class="mt-6 space-y-4">
-                <div class="grid grid-cols-2 gap-2 rounded-lg bg-muted/50 p-1">
+                <div class="grid grid-cols-2 gap-2 rounded-lg bg-muted dark:bg-muted/50 p-1">
                     <button
                         class="rounded-md px-3 py-2 text-sm font-medium transition-colors"
                         :class="movementDirection === 'expense'
@@ -1048,7 +1048,7 @@ const transactionDays = computed(() => {
                     </p>
                 </div>
 
-                <p v-if="movementSubcategory" class="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                <p v-if="movementSubcategory" class="rounded-md bg-muted dark:bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
                     <template v-if="movementDirection === 'income'">
                         Atteso {{ formatCurrency(planned(movementSubcategory.id)) }} · già incassato
                         {{ formatCurrency(actual(movementSubcategory.id)) }}

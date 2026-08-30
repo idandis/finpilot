@@ -87,7 +87,7 @@ function squareColorClass(week: LifeWeekSummary): string {
     if (selectedMetric.value === 'none') {
         return week.isCurrent
             ? 'bg-primary text-primary-foreground'
-            : 'bg-muted/60 text-muted-foreground';
+            : 'bg-muted text-muted-foreground dark:bg-muted/60';
     }
 
     if (selectedMetric.value === 'season') {
@@ -97,7 +97,7 @@ function squareColorClass(week: LifeWeekSummary): string {
     const value = metricValue(week);
 
     if (value === null) {
-        return 'bg-muted/40 text-muted-foreground';
+        return 'bg-muted text-muted-foreground dark:bg-muted/40';
     }
 
     if (value < 20) {

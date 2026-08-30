@@ -180,4 +180,43 @@ class ShoppingListItemControllerTest extends TestCase
         $response->assertForbidden();
         $this->assertDatabaseHas('shopping_list_items', ['id' => $item->id, 'purchased' => false]);
     }
+
+    public function test_a_member_can_add_tick_move_and_delete_products_of_a_shared_list()
+    {
+        $owner = User::factory()->create();
+        $mate = User::factory()->create();
+        $list = ShoppingList::factory()->create(['user_id' => $owner->id]);
+        $list->members()->attach($mate->id);
+        $ownersItem = ShoppingListItem::factory()->create([
+            'shopping_list_id' => $list->id,
+            'category' => 'frutta',
+            'purchased' => false,
+        ]);
+
+        $this->actingAs($mate)->post(route('shopping-list-items.store', $list), ['name' => 'Pane', 'category' => 'panetteria']);
+        $this->assertDatabaseHas('shopping_list_items', ['shopping_list_id' => $list->id, 'name' => 'Pane']);
+
+        $this->actingAs($mate)->patch(route('shopping-list-items.toggle', $ownersItem));
+        $this->assertTrue($ownersItem->fresh()->purchased);
+
+        $this->actingAs($mate)->patch(route('shopping-list-items.move', $ownersItem), ['category' => 'verdura']);
+        $this->assertSame('verdura', $ownersItem->fresh()->category);
+
+        $this->actingAs($mate)->delete(route('shopping-list-items.destroy', $ownersItem));
+        $this->assertDatabaseMissing('shopping_list_items', ['id' => $ownersItem->id]);
+    }
+
+    public function test_someone_the_list_is_not_shared_with_cannot_touch_its_products()
+    {
+        $owner = User::factory()->create();
+        $stranger = User::factory()->create();
+        $list = ShoppingList::factory()->create(['user_id' => $owner->id]);
+        $item = ShoppingListItem::factory()->create(['shopping_list_id' => $list->id, 'category' => 'frutta']);
+
+        $this->actingAs($stranger)->post(route('shopping-list-items.store', $list), ['name' => 'Pane', 'category' => 'panetteria'])
+            ->assertForbidden();
+        $this->actingAs($stranger)->patch(route('shopping-list-items.toggle', $item))->assertForbidden();
+        $this->actingAs($stranger)->patch(route('shopping-list-items.move', $item), ['category' => 'verdura'])->assertForbidden();
+        $this->actingAs($stranger)->delete(route('shopping-list-items.destroy', $item))->assertForbidden();
+    }
 }

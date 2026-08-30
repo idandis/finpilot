@@ -2,10 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Meals\MealAssignRequest;
 use App\Http\Requests\Meals\MealMoveRequest;
+use App\Http\Requests\Meals\MealPlanMemberStoreRequest;
 use App\Http\Requests\Meals\MealStoreRequest;
+use App\Http\Requests\Meals\MealUpdateRequest;
 use App\Models\Meal;
+use App\Models\User;
 use App\Services\Meals\DishCategories;
+use App\Services\Sharing\SharedResource;
 use App\Services\Shopping\GroceryCategories;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
@@ -23,14 +28,24 @@ class MealController extends Controller
      * requested via ?date= (any date within it) to browse forward/back -
      * grouping by day and lunch/dinner happens client-side from this flat
      * per-week array.
+     *
+     * It also defaults to the user's own meal plan; ?plan=<user id> switches
+     * to one shared with them (see resolvePlanOwner()). A shared plan is the
+     * very same week seen by everyone on it, each meal optionally on
+     * whoever is cooking it.
+     *
+     * The dish library stays personal either way: dragging one of your own
+     * dishes onto somebody else's plan is the normal way to plan together.
      */
     public function index(Request $request): Response
     {
+        $user = $request->user();
         $today = Carbon::today();
         $weekStart = $this->resolveWeekStart($request->query('date'), $today);
         $weekEnd = $weekStart->copy()->addDays(6);
+        $owner = $this->resolvePlanOwner($user, $request->query('plan'));
 
-        $meals = $this->weekMeals($request, $weekStart, $weekEnd)
+        $meals = $this->weekMeals($owner, $weekStart, $weekEnd)
             ->map(fn (Meal $meal) => [
                 'id' => $meal->id,
                 'title' => $meal->title,
@@ -39,18 +54,73 @@ class MealController extends Controller
                 'meal_type' => $meal->meal_type,
                 'category' => $meal->category,
                 'position' => $meal->position,
+                'assignee' => $meal->assignee?->only(['id', 'name']),
             ]);
 
-        $dishes = $request->user()->dishes()->with('ingredients')->orderBy('name')->get(['id', 'name', 'description', 'category']);
+        $dishes = $user->dishes()->with('ingredients')->orderBy('name')->get(['id', 'name', 'description', 'category']);
 
         return Inertia::render('Meals/Index', [
             'weekStart' => $weekStart->toDateString(),
             'today' => $today->toDateString(),
+            'plans' => $this->accessiblePlans($user),
+            'plan' => $this->serializePlan($owner, $user),
             'meals' => $meals,
             'dishes' => $dishes,
             'dishCategories' => DishCategories::ALL,
             'groceryCategories' => GroceryCategories::ALL,
         ]);
+    }
+
+    /**
+     * The user's own plan by default - also where an unknown id or a plan
+     * they were never invited to (or have just been removed from) lands,
+     * the same forgiving treatment as resolveWeekStart().
+     */
+    private function resolvePlanOwner(User $user, mixed $requested): User
+    {
+        if (! is_numeric($requested)) {
+            return $user;
+        }
+
+        $owner = User::query()->find((int) $requested);
+
+        return $owner?->mealPlanIsAccessibleBy($user) ? $owner : $user;
+    }
+
+    /**
+     * The plan switcher: the user's own plan first, then the ones shared
+     * with them, each identified by its owner.
+     *
+     * @return Collection<int, array{id: int, name: string, is_shared: bool}>
+     */
+    private function accessiblePlans(User $user): Collection
+    {
+        return collect([['id' => $user->id, 'name' => 'I miei pasti', 'is_shared' => false]])
+            ->concat($user->sharedMealPlans()->orderBy('name')->get()
+                ->map(fn (User $owner) => ['id' => $owner->id, 'name' => $owner->name, 'is_shared' => true]));
+    }
+
+    /**
+     * The plan being shown, with everyone on it - the list behind both the
+     * sharing panel and the cook picker.
+     *
+     * @return array<string, mixed>
+     */
+    private function serializePlan(User $owner, User $user): array
+    {
+        $owner->load('mealPlanMembers:id,name,email');
+
+        return [
+            'id' => $owner->id,
+            'name' => $owner->id === $user->id ? 'I miei pasti' : $owner->name,
+            'is_owner' => $owner->id === $user->id,
+            'people' => $owner->mealPlanPeople()->map(fn (User $person) => [
+                'id' => $person->id,
+                'name' => $person->name,
+                'email' => $person->email,
+                'is_owner' => $person->id === $owner->id,
+            ])->all(),
+        ];
     }
 
     /**
@@ -61,8 +131,9 @@ class MealController extends Controller
     {
         $weekStart = $this->resolveWeekStart($request->query('date'), Carbon::today());
         $weekEnd = $weekStart->copy()->addDays(6);
+        $owner = $this->resolvePlanOwner($request->user(), $request->query('plan'));
 
-        $meals = $this->weekMeals($request, $weekStart, $weekEnd);
+        $meals = $this->weekMeals($owner, $weekStart, $weekEnd);
 
         $days = collect(range(0, 6))->map(fn (int $offset) => [
             'date' => $weekStart->copy()->addDays($offset),
@@ -108,7 +179,9 @@ class MealController extends Controller
         $weekStart = $this->resolveWeekStart($request->query('date'), Carbon::today());
         $weekEnd = $weekStart->copy()->addDays(6);
 
-        $meals = $request->user()->meals()
+        $owner = $this->resolvePlanOwner($request->user(), $request->query('plan'));
+
+        $meals = $owner->meals()
             ->whereDate('meal_date', '>=', $weekStart)
             ->whereDate('meal_date', '<=', $weekEnd)
             ->with('dish.ingredients')
@@ -162,13 +235,14 @@ class MealController extends Controller
     /**
      * @return Collection<int, Meal>
      */
-    private function weekMeals(Request $request, Carbon $weekStart, Carbon $weekEnd): Collection
+    private function weekMeals(User $owner, Carbon $weekStart, Carbon $weekEnd): Collection
     {
-        return $request->user()->meals()
+        return $owner->meals()
             ->whereDate('meal_date', '>=', $weekStart)
             ->whereDate('meal_date', '<=', $weekEnd)
+            ->with('assignee:id,name')
             ->orderBy('position')
-            ->get(['id', 'title', 'description', 'meal_date', 'meal_type', 'category', 'position']);
+            ->get(['id', 'user_id', 'assigned_to_user_id', 'title', 'description', 'meal_date', 'meal_type', 'category', 'position']);
     }
 
     /**
@@ -192,21 +266,108 @@ class MealController extends Controller
     }
 
     /**
-     * A new meal is always appended to the end of its chosen day/slot.
+     * A new meal is always appended to the end of its chosen day/slot, on
+     * the plan it was added to (the user's own unless plan_user_id points
+     * at one shared with them).
      */
     public function store(MealStoreRequest $request): RedirectResponse
     {
-        $nextPosition = 1 + ($request->user()->meals()
+        $owner = $request->planOwner();
+
+        $nextPosition = 1 + ($owner->meals()
             ->whereDate('meal_date', $request->validated('meal_date'))
             ->where('meal_type', $request->validated('meal_type'))
             ->max('position') ?? -1);
 
-        $request->user()->meals()->create([
-            ...$request->validated(),
+        $meal = $owner->meals()->create([
+            ...collect($request->validated())->except('plan_user_id')->all(),
             'position' => $nextPosition,
         ]);
 
+        SharedResource::forMealPlan($owner)
+            ->announce($request->user(), "ha aggiunto il pasto «{$meal->title}»");
+
         return back();
+    }
+
+    /**
+     * Editing a meal already on the board: what it is and who cooks it.
+     * Its day and slot are not touched here - those move by drag and drop
+     * (see move()).
+     */
+    public function update(MealUpdateRequest $request, Meal $meal): RedirectResponse
+    {
+        $meal->update($request->validated());
+
+        SharedResource::forMealPlan($meal->user)
+            ->announce($request->user(), "ha modificato il pasto «{$meal->title}»");
+
+        return back();
+    }
+
+    /**
+     * Puts the meal on one of the plan's people (or on nobody, with a null
+     * id) - who's cooking it.
+     */
+    public function assign(MealAssignRequest $request, Meal $meal): RedirectResponse
+    {
+        $meal->update(['assigned_to_user_id' => $request->validated('assigned_to_user_id')]);
+
+        $resource = SharedResource::forMealPlan($meal->user);
+        $cook = $meal->assigned_to_user_id ? User::query()->find($meal->assigned_to_user_id) : null;
+
+        if ($cook) {
+            // Whoever is at the stove hears it addressed to them, the rest
+            // of the plan hears who it went to.
+            $resource->tell([$cook], $request->user(), "ti ha messo ai fornelli per «{$meal->title}»");
+            $resource->tell(
+                $resource->people->reject(fn (User $person) => $person->id === $cook->id),
+                $request->user(),
+                "ha messo {$cook->name} ai fornelli per «{$meal->title}»",
+            );
+        } else {
+            $resource->announce($request->user(), "ha tolto chi cucinava «{$meal->title}»");
+        }
+
+        return back();
+    }
+
+    /**
+     * Shares the user's own meal plan with another user of the platform,
+     * found by the email they signed up with (an unknown email is a
+     * validation error, not an invite: there is nobody to invite yet).
+     */
+    public function storeMember(MealPlanMemberStoreRequest $request): RedirectResponse
+    {
+        $member = User::query()->where('email', $request->validated('email'))->sole();
+
+        $request->user()->mealPlanMembers()->syncWithoutDetaching([$member->id]);
+
+        $request->user()->load('mealPlanMembers');
+
+        SharedResource::forMealPlan($request->user())->invite($member, $request->user());
+
+        return back();
+    }
+
+    /**
+     * Removes someone from a plan - the owner removing a member, or a
+     * member leaving on their own. Whatever they were cooking stays
+     * planned, simply with nobody on it.
+     */
+    public function destroyMember(Request $request, User $owner, User $user): RedirectResponse
+    {
+        $isOwner = $owner->id === $request->user()->id;
+        $isLeaving = $user->id === $request->user()->id;
+
+        abort_unless($isOwner || $isLeaving, 403);
+        abort_if($user->id === $owner->id, 403, 'Il proprietario non può essere rimosso dalla sua pianificazione.');
+
+        $owner->mealPlanMembers()->detach($user->id);
+
+        $owner->meals()->where('assigned_to_user_id', $user->id)->update(['assigned_to_user_id' => null]);
+
+        return $isLeaving ? to_route('meals.index') : back();
     }
 
     /**
@@ -227,14 +388,20 @@ class MealController extends Controller
 
         $meal->update(['meal_date' => $mealDate, 'meal_type' => $mealType, 'position' => $nextPosition]);
 
+        SharedResource::forMealPlan($meal->user)
+            ->announce($request->user(), "ha spostato il pasto «{$meal->title}»");
+
         return back();
     }
 
     public function destroy(Request $request, Meal $meal): RedirectResponse
     {
-        abort_unless($meal->user_id === $request->user()->id, 403);
+        abort_unless($meal->user->mealPlanIsAccessibleBy($request->user()), 403);
 
         $meal->delete();
+
+        SharedResource::forMealPlan($meal->user)
+            ->announce($request->user(), "ha eliminato il pasto «{$meal->title}»");
 
         return back();
     }

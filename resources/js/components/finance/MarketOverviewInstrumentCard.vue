@@ -80,7 +80,7 @@ function changeClass(value: number | null) {
 </script>
 
 <template>
-    <div class="space-y-3 rounded-lg bg-muted/40 p-4">
+    <div class="space-y-3 rounded-lg bg-muted dark:bg-muted/40 p-4">
         <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
                 <p class="line-clamp-2 text-sm font-medium">{{ instrument.label }}</p>

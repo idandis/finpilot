@@ -6,6 +6,7 @@ use App\Http\Requests\Shopping\ShoppingListItemMoveRequest;
 use App\Http\Requests\Shopping\ShoppingListItemStoreRequest;
 use App\Models\ShoppingList;
 use App\Models\ShoppingListItem;
+use App\Services\Sharing\SharedResource;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -21,10 +22,13 @@ class ShoppingListItemController extends Controller
             ->where('category', $request->validated('category'))
             ->max('position') ?? -1);
 
-        $shoppingList->items()->create([
+        $item = $shoppingList->items()->create([
             ...$request->validated(),
             'position' => $nextPosition,
         ]);
+
+        SharedResource::forShoppingList($shoppingList)
+            ->announce($request->user(), "ha aggiunto «{$item->name}» a «{$shoppingList->name}»");
 
         return back();
     }
@@ -54,18 +58,27 @@ class ShoppingListItemController extends Controller
      */
     public function toggle(Request $request, ShoppingListItem $shoppingListItem): RedirectResponse
     {
-        abort_unless($shoppingListItem->list->user_id === $request->user()->id, 403);
+        abort_unless($shoppingListItem->list->isAccessibleBy($request->user()), 403);
 
         $shoppingListItem->update(['purchased' => ! $shoppingListItem->purchased]);
+
+        $action = $shoppingListItem->purchased
+            ? "ha preso «{$shoppingListItem->name}»"
+            : "ha rimesso in lista «{$shoppingListItem->name}»";
+
+        SharedResource::forShoppingList($shoppingListItem->list)->announce($request->user(), $action);
 
         return back();
     }
 
     public function destroy(Request $request, ShoppingListItem $shoppingListItem): RedirectResponse
     {
-        abort_unless($shoppingListItem->list->user_id === $request->user()->id, 403);
+        abort_unless($shoppingListItem->list->isAccessibleBy($request->user()), 403);
 
         $shoppingListItem->delete();
+
+        SharedResource::forShoppingList($shoppingListItem->list)
+            ->announce($request->user(), "ha eliminato «{$shoppingListItem->name}» da «{$shoppingListItem->list->name}»");
 
         return back();
     }

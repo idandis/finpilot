@@ -261,7 +261,7 @@ function destroyAsset(asset: BalanceSheetEntry) {
                         {{ tile.value }}
                     </p>
                 </div>
-                <div class="rounded-lg border bg-muted/40 p-4 md:col-span-2">
+                <div class="rounded-lg border bg-muted dark:bg-muted/40 p-4 md:col-span-2">
                     <p class="text-sm text-muted-foreground">
                         Patrimonio netto
                     </p>
