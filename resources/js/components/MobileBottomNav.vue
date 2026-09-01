@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { KanbanSquare, KeyRound, LayoutGrid, ShoppingCart, Sparkles, TrendingUp } from '@lucide/vue';
+import { KanbanSquare, KeyRound, LayoutGrid, ShoppingCart, Sparkles, Wallet } from '@lucide/vue';
 import { onMounted, onUnmounted, ref } from 'vue';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { dashboard } from '@/routes';
 import * as aiChat from '@/routes/ai-chat';
-import * as investments from '@/routes/investments';
+import * as monthlyBudgets from '@/routes/monthly-budgets';
 import * as passwords from '@/routes/passwords';
 import * as shoppingLists from '@/routes/shopping-lists';
 import * as tasks from '@/routes/tasks';
@@ -15,7 +15,7 @@ const { isCurrentUrl } = useCurrentUrl();
 const items = [
     { href: aiChat.index(), icon: Sparkles, label: 'AI' },
     { href: dashboard(), icon: LayoutGrid, label: 'Dashboard' },
-    { href: investments.index(), icon: TrendingUp, label: 'Investimenti' },
+    { href: monthlyBudgets.index(), icon: Wallet, label: 'Budget mensile' },
     { href: tasks.index(), icon: KanbanSquare, label: 'Task' },
     { href: passwords.index(), icon: KeyRound, label: 'Password' },
     { href: shoppingLists.index(), icon: ShoppingCart, label: 'Lista della spesa' },

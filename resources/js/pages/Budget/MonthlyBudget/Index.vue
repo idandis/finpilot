@@ -1,19 +1,26 @@
 <script setup lang="ts">
-import { Head, router, useForm } from '@inertiajs/vue3';
-import { ArrowDownLeft, ArrowUpRight, Check, Plus, Trash2 } from '@lucide/vue';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { ArrowDownLeft, ArrowUpRight, ChevronDown, EllipsisVertical, FileDown, Pencil, Plus, Settings, Trash2 } from '@lucide/vue';
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import monthlyBudgets from '@/routes/monthly-budgets';
 import budgetCategories from '@/routes/budget-categories';
 import budgetSubcategories from '@/routes/budget-subcategories';
 import budgetExpenses from '@/routes/budget-expenses';
-import BudgetCategoryCard from '@/components/budget/BudgetCategoryCard.vue';
+import BudgetCategoryRow from '@/components/budget/BudgetCategoryRow.vue';
+import BudgetSummaryRing from '@/components/budget/BudgetSummaryRing.vue';
 import BudgetExpenseSummary from '@/components/budget/BudgetExpenseSummary.vue';
-import Heading from '@/components/Heading.vue';
-import { formatCurrency } from '@/lib/balance-sheet-format';
+import BudgetCategoryManager from '@/components/budget/BudgetCategoryManager.vue';
+import BudgetColorPicker from '@/components/budget/BudgetColorPicker.vue';
+import { formatAmount, formatCurrency } from '@/lib/balance-sheet-format';
 import { Button } from '@/components/ui/button';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Spinner } from '@/components/ui/spinner';
 import {
     Sheet,
     SheetContent,
@@ -84,7 +91,8 @@ const currentMonth = ref(props.month);
 
 const budgetData = ref<Record<number, number>>({ ...props.budgetLines });
 const expenseData = ref<Record<number, number>>({ ...props.expenses });
-const expandedCategories = ref<Set<number>>(new Set());
+// Una categoria aperta alla volta: aprirne un'altra chiude la precedente.
+const expandedCategoryId = ref<number | null>(null);
 
 // Voci con un importo previsto modificato ma non ancora salvato: vanno
 // preservate quando Inertia rinfresca le props (es. dopo un movimento).
@@ -92,6 +100,9 @@ const unsavedLines = ref<Set<number>>(new Set());
 const loadedMonth = ref(`${props.year}-${props.month}`);
 
 const isAddCategoryOpen = ref(false);
+const isCategoryManagerOpen = ref(false);
+// Tengo l'id e non l'oggetto: dopo un salvataggio le props arrivano nuove.
+const managedCategoryId = ref<number | null>(null);
 const isAddSubcategoryOpen = ref(false);
 const isAddMovementOpen = ref(false);
 const selectedCategoryId = ref<number | null>(null);
@@ -121,25 +132,32 @@ const movementForm = useForm({
     recorded_at: '',
 });
 
+// Il dialog dei movimenti serve sia a crearne uno sia a modificarlo.
+const editingTransaction = ref<Transaction | null>(null);
+// Creazione al volo di una voce mancante, senza uscire dal dialog.
+const isAddingMovementSubcategory = ref(false);
+const quickSubcategoryForm = useForm({
+    name: '',
+    scope: 'month',
+    year: props.year,
+    month: props.month,
+});
+
 const movementDirection = ref<Direction>('expense');
 const movementCategoryId = ref<number | null>(null);
 const movementDate = ref('');
 const movementTime = ref('');
-
-const predefinedColors = [
-    '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
-    '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#06b6d4',
-];
 
 // Salvataggio automatico degli importi previsti.
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 let queuedSave = false;
 let pendingNavigation: (() => void) | null = null;
 const savingLines = ref<number[]>([]);
-const hasSavedOnce = ref(false);
 const isSaving = computed(() => savingLines.value.length > 0);
 
-const monthLabel = computed(() => `${months[currentMonth.value - 1]} ${currentYear.value}`);
+const monthName = computed(() => months[currentMonth.value - 1]);
+
+const monthLabel = computed(() => `${monthName.value} ${currentYear.value}`);
 
 // Inertia riusa il componente: al ritorno dal server gli importi vanno
 // riallineati, senza però buttare via quello che si sta digitando.
@@ -193,18 +211,32 @@ const sections = computed(() => [
     {
         direction: 'income' as Direction,
         title: 'Entrate',
+        totalLabel: 'Totale da incassare',
         emptyLabel: 'Nessuna categoria di entrata per questo mese.',
         addLabel: 'Categoria di entrata',
         categories: categoriesOf('income'),
+        planned: incomePlanned.value,
+        actual: incomeActual.value,
     },
     {
         direction: 'expense' as Direction,
-        title: 'Uscite',
+        title: 'Budget',
+        totalLabel: 'Totale residuo',
         emptyLabel: 'Nessuna categoria di uscita per questo mese.',
         addLabel: 'Categoria di uscita',
         categories: categoriesOf('expense'),
+        planned: expensePlanned.value,
+        actual: expenseActual.value,
     },
 ]);
+
+// Come nelle righe: sulle entrate un residuo negativo è un incasso in più,
+// sulle uscite è invece uno sforamento.
+const residualLabel = (direction: Direction, residual: number) =>
+    direction === 'income' && residual < 0 ? `+${formatAmount(-residual)}` : formatAmount(residual);
+
+const isOverspent = (direction: Direction, residual: number) =>
+    direction === 'expense' && residual < 0;
 
 // Barra unica: il fondo scala sulle entrate del mese, il riempimento sono
 // le uscite. Finché non è entrato nulla si usa quanto è atteso.
@@ -219,11 +251,7 @@ const budgetUsage = computed(() => {
 });
 
 const toggleCategory = (categoryId: number) => {
-    if (expandedCategories.value.has(categoryId)) {
-        expandedCategories.value.delete(categoryId);
-    } else {
-        expandedCategories.value.add(categoryId);
-    }
+    expandedCategoryId.value = expandedCategoryId.value === categoryId ? null : categoryId;
 };
 
 const today = new Date();
@@ -242,6 +270,10 @@ const yearOptions = computed(() => {
 
 const isToday = (year: number, month: number) =>
     today.getFullYear() === year && today.getMonth() + 1 === month;
+
+const isViewingToday = computed(() => isToday(currentYear.value, currentMonth.value));
+
+const goToToday = () => goToMonth(today.getFullYear(), today.getMonth() + 1);
 
 const monthRow = ref<HTMLElement | null>(null);
 
@@ -331,7 +363,6 @@ function flushSave() {
             only: ['budgetLines', 'expenses', 'transactions', 'monthlyBudget'],
             onSuccess: () => {
                 ids.forEach((id) => unsavedLines.value.delete(id));
-                hasSavedOnce.value = true;
             },
             onFinish: () => {
                 savingLines.value = [];
@@ -361,19 +392,41 @@ const updateBudgetLine = (subcategoryId: number, amount: string) => {
     saveTimer = setTimeout(flushSave, 900);
 };
 
-const saveStatus = computed(() => {
-    if (isSaving.value) return 'saving';
-    if (unsavedLines.value.size > 0) return 'pending';
+const isDownloadingPdf = ref(false);
 
-    return hasSavedOnce.value ? 'saved' : 'idle';
+const pdfUrl = () => monthlyBudgets.pdf.url({
+    query: { year: currentYear.value, month: currentMonth.value },
 });
 
-const saveStatusLabel = computed(() => ({
-    saving: 'Salvataggio…',
-    pending: 'Modifiche in attesa',
-    saved: 'Salvato',
-    idle: '',
-}[saveStatus.value]));
+// In app installata una <a href> al PDF sostituisce la pagina e non si torna
+// più indietro: lo scarico come blob e lascio l'app dov'è.
+const downloadPdf = async () => {
+    if (isDownloadingPdf.value) return;
+
+    isDownloadingPdf.value = true;
+
+    try {
+        const response = await fetch(pdfUrl(), { credentials: 'same-origin' });
+
+        if (!response.ok) throw new Error(String(response.status));
+
+        const objectUrl = URL.createObjectURL(await response.blob());
+        const link = document.createElement('a');
+
+        link.href = objectUrl;
+        link.download = `budget-${currentYear.value}-${String(currentMonth.value).padStart(2, '0')}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        // Safari annulla il download se l'URL viene revocato subito.
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
+    } catch {
+        window.open(pdfUrl(), '_blank', 'noopener');
+    } finally {
+        isDownloadingPdf.value = false;
+    }
+};
 
 const openAddCategory = (direction: Direction) => {
     categoryForm.reset();
@@ -398,6 +451,34 @@ const submitCategory = () => {
 const selectedCategory = computed(() =>
     props.categories.find((category) => category.id === selectedCategoryId.value) ?? null);
 
+const managedCategory = computed(() =>
+    props.categories.find((category) => category.id === managedCategoryId.value) ?? null);
+
+const managedTransactions = computed(() =>
+    props.transactions.filter((transaction) => transaction.category_id === managedCategoryId.value));
+
+const openCategoryManager = (category: Category) => {
+    managedCategoryId.value = category.id;
+    isCategoryManagerOpen.value = true;
+};
+
+// Due pannelli modali sovrapposti si contendono il focus: chiudo il gestore
+// prima di aprire quello che parte da dentro.
+const deleteCategoryFromManager = () => {
+    if (!managedCategory.value) return;
+
+    isCategoryManagerOpen.value = false;
+    deleteCategory(managedCategory.value);
+};
+
+const addSubcategoryFromManager = () => {
+    if (!managedCategoryId.value) return;
+
+    const categoryId = managedCategoryId.value;
+    isCategoryManagerOpen.value = false;
+    openAddSubcategory(categoryId);
+};
+
 const openAddSubcategory = (categoryId: number) => {
     selectedCategoryId.value = categoryId;
     subcategoryForm.reset();
@@ -420,13 +501,14 @@ const submitSubcategory = () => {
     });
 };
 
-const scopeLabel = (monthlyBudgetId: number | null) =>
-    monthlyBudgetId ? `solo da ${monthLabel.value}` : 'da tutti i mesi';
-
+// Da qui si cancella solo quello che è nato in questo mese: le categorie e le
+// voci valide per tutti i mesi si gestiscono dalla pagina Categorie.
 const deleteCategory = (category: Category) => {
+    if (!category.monthly_budget_id) return;
+
     const confirmed = confirm(
-        `Eliminare "${category.name}" e le sue voci ${scopeLabel(category.monthly_budget_id)}? `
-        + 'Verranno persi anche gli importi previsti e i movimenti collegati.',
+        `Eliminare "${category.name}" e le sue voci solo da ${monthLabel.value}? `
+        + 'Verranno persi anche gli importi attesi e i movimenti collegati.',
     );
 
     if (!confirmed) return;
@@ -437,11 +519,11 @@ const deleteCategory = (category: Category) => {
 const deleteSubcategory = (category: Category, subcategoryId: number) => {
     const subcategory = category.subcategories.find((sub) => sub.id === subcategoryId);
 
-    if (!subcategory) return;
+    if (!subcategory?.monthly_budget_id) return;
 
     const confirmed = confirm(
-        `Eliminare "${subcategory.name}" ${scopeLabel(subcategory.monthly_budget_id)}? `
-        + 'Verranno persi anche gli importi previsti e i movimenti collegati.',
+        `Eliminare "${subcategory.name}" solo da ${monthLabel.value}? `
+        + 'Verranno persi anche gli importi attesi e i movimenti collegati.',
     );
 
     if (!confirmed) return;
@@ -473,13 +555,79 @@ const setMovementDirection = (direction: Direction) => {
     movementForm.budget_subcategory_id = null;
 };
 
-watch(movementCategoryId, (categoryId, previous) => {
-    if (previous !== null && categoryId !== previous) {
+watch(movementCategoryId, (categoryId) => {
+    const stillValid = props.categories
+        .find((category) => category.id === categoryId)
+        ?.subcategories
+        .some((sub) => sub.id === movementForm.budget_subcategory_id);
+
+    if (!stillValid) {
         movementForm.budget_subcategory_id = null;
     }
 });
 
+const setMovementDate = (date: Date) => {
+    movementDate.value = [
+        date.getFullYear(),
+        String(date.getMonth() + 1).padStart(2, '0'),
+        String(date.getDate()).padStart(2, '0'),
+    ].join('-');
+    movementTime.value = date.toTimeString().slice(0, 5);
+};
+
+const resetQuickSubcategory = () => {
+    isAddingMovementSubcategory.value = false;
+    quickSubcategoryForm.reset();
+    quickSubcategoryForm.clearErrors();
+};
+
+const createMovementSubcategory = () => {
+    const categoryId = movementCategoryId.value;
+    const name = quickSubcategoryForm.name.trim();
+
+    if (!categoryId || name === '') return;
+
+    quickSubcategoryForm.year = currentYear.value;
+    quickSubcategoryForm.month = currentMonth.value;
+
+    quickSubcategoryForm.post(budgetCategories.subcategories.store.url(categoryId), {
+        preserveScroll: true,
+        preserveState: true,
+        only: ['categories'],
+        onSuccess: () => {
+            // La voce appena creata viene selezionata: è quella che serviva.
+            const created = props.categories
+                .find((category) => category.id === categoryId)
+                ?.subcategories.find((sub) => sub.name === name);
+
+            if (created) {
+                movementForm.budget_subcategory_id = created.id;
+            }
+
+            resetQuickSubcategory();
+        },
+    });
+};
+
+const openEditMovement = (transaction: Transaction) => {
+    editingTransaction.value = transaction;
+    resetQuickSubcategory();
+    movementForm.reset();
+    movementForm.clearErrors();
+
+    movementDirection.value = transaction.direction;
+    movementCategoryId.value = transaction.category_id;
+    movementForm.budget_subcategory_id = transaction.subcategory_id;
+    movementForm.amount = String(transaction.amount);
+    movementForm.description = transaction.description ?? '';
+    setMovementDate(transaction.recorded_at ? new Date(transaction.recorded_at) : new Date());
+
+    isAddMovementOpen.value = true;
+};
+
 const openAddMovement = () => {
+    editingTransaction.value = null;
+    resetQuickSubcategory();
     movementForm.reset();
     movementForm.clearErrors();
     movementCategoryId.value = null;
@@ -491,12 +639,9 @@ const openAddMovement = () => {
         now.getFullYear() === currentYear.value && now.getMonth() + 1 === currentMonth.value;
     const day = isCurrentMonth ? now : new Date(currentYear.value, currentMonth.value - 1, 1);
 
-    movementDate.value = [
-        day.getFullYear(),
-        String(day.getMonth() + 1).padStart(2, '0'),
-        String(day.getDate()).padStart(2, '0'),
-    ].join('-');
-    movementTime.value = isCurrentMonth ? now.toTimeString().slice(0, 5) : '12:00';
+    setMovementDate(day);
+
+    if (!isCurrentMonth) movementTime.value = '12:00';
 
     isAddMovementOpen.value = true;
 };
@@ -507,14 +652,23 @@ const submitMovement = () => {
     movementForm.amount = movementForm.amount.replace(',', '.');
     movementForm.recorded_at = `${movementDate.value} ${movementTime.value}`;
 
-    movementForm.post(budgetExpenses.store.url(), {
+    const options = {
         preserveScroll: true,
         onSuccess: () => {
             isAddMovementOpen.value = false;
+            editingTransaction.value = null;
             movementForm.reset();
             movementCategoryId.value = null;
         },
-    });
+    };
+
+    if (editingTransaction.value) {
+        movementForm.put(budgetExpenses.update.url(editingTransaction.value.id), options);
+
+        return;
+    }
+
+    movementForm.post(budgetExpenses.store.url(), options);
 };
 
 const deleteTransaction = (transaction: Transaction) => {
@@ -524,6 +678,7 @@ const deleteTransaction = (transaction: Transaction) => {
 };
 
 const transactionFilter = ref<number | 'all'>('all');
+const isTransactionsOpen = ref(true);
 
 // Solo le categorie che compaiono davvero nei movimenti del mese.
 const transactionCategories = computed(() => {
@@ -571,9 +726,6 @@ const dayLabel = (date: Date) => {
 const timeLabel = (isoDate: string | null) =>
     isoDate ? new Date(isoDate).toTimeString().slice(0, 5) : '—';
 
-const filteredTotal = computed(() =>
-    filteredTransactions.value.reduce((sum, transaction) => sum + signedAmount(transaction), 0));
-
 const transactionDays = computed(() => {
     const groups = new Map<string, { label: string; total: number; items: Transaction[] }>();
 
@@ -598,14 +750,36 @@ const transactionDays = computed(() => {
     <Head title="Budget Mensile" />
 
     <div class="mx-auto flex w-full max-w-[64rem] flex-col space-y-6 p-4 pb-28">
-        <Heading
-            title="Budget Mensile"
-            description="Prevedi entrate e uscite, registra i movimenti e guarda cosa resta"
-        />
+        <div class="flex items-center justify-between gap-4">
+            <h2 class="text-xl font-semibold tracking-tight">Budget Mensile</h2>
+            <div class="flex items-center gap-2">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    :disabled="isDownloadingPdf"
+                    title="Scarica il budget del mese in PDF"
+                    @click="downloadPdf"
+                >
+                    <FileDown class="mr-2 size-4" />
+                    PDF
+                </Button>
 
-        <!-- Mese e anno -->
-        <div>
-            <div ref="monthRow" class="flex items-center gap-2 overflow-x-auto pb-1">
+                <Button variant="outline" size="icon-sm" as-child>
+                    <Link
+                        :href="budgetCategories.index.url()"
+                        title="Configura categorie e voci"
+                        aria-label="Configura categorie e voci"
+                    >
+                        <Settings class="size-4" />
+                    </Link>
+                </Button>
+            </div>
+        </div>
+
+        <!-- Mese e anno: scorre da bordo a bordo, il padding sta dentro allo
+             scroller così la prima e l'ultima pillola restano allineate al resto -->
+        <div class="-mx-4">
+            <div ref="monthRow" class="flex items-center gap-2 overflow-x-auto px-4 pb-1">
                 <Select v-model="selectedYear">
                     <SelectTrigger class="h-9 w-24 shrink-0 rounded-full border-0 bg-muted/50 shadow-none">
                         <SelectValue />
@@ -636,179 +810,231 @@ const transactionDays = computed(() => {
                     {{ label }}
                 </button>
             </div>
+
+            <div v-if="!isViewingToday" class="px-4 pt-2">
+                <button
+                    class="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                    @click="goToToday"
+                >
+                    Torna a oggi
+                </button>
+            </div>
         </div>
 
-        <!-- Riepilogo del mese -->
+        <!-- Riepilogo del mese: anelli su mobile, valori per esteso su desktop -->
         <div class="space-y-4">
-            <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                <div class="rounded-lg bg-muted dark:bg-muted/50 p-3">
-                    <p class="text-xs text-muted-foreground">Entrate</p>
-                    <p class="text-lg font-bold">{{ formatCurrency(incomeActual) }}</p>
-                    <p class="text-xs text-muted-foreground">incassate</p>
-                    <div class="mt-2 flex items-baseline justify-between gap-2 border-t pt-2 text-xs">
-                        <span class="text-muted-foreground">Attese</span>
-                        <span class="font-medium tabular-nums">{{ formatCurrency(incomePlanned) }}</span>
-                    </div>
-                </div>
-                <div class="rounded-lg bg-muted dark:bg-muted/50 p-3">
-                    <p class="text-xs text-muted-foreground">Uscite</p>
-                    <p class="text-lg font-bold">{{ formatCurrency(expenseActual) }}</p>
-                    <p class="text-xs text-muted-foreground">spese</p>
-                    <div class="mt-2 flex items-baseline justify-between gap-2 border-t pt-2 text-xs">
-                        <span class="text-muted-foreground">Attese</span>
-                        <span class="font-medium tabular-nums">{{ formatCurrency(expensePlanned) }}</span>
-                    </div>
-                </div>
-                <div class="col-span-2 rounded-lg bg-muted dark:bg-muted/50 p-3 sm:col-span-1">
-                    <p class="text-xs text-muted-foreground">Saldo del mese</p>
-                    <p
-                        class="text-lg font-bold"
-                        :class="balanceActual >= 0 ? 'text-green-600' : 'text-red-600'"
-                    >
-                        {{ formatCurrency(balanceActual) }}
+            <div class="flex items-center justify-center pt-4 sm:hidden">
+                <BudgetSummaryRing
+                    class="-mr-6"
+                    label="Entrate"
+                    :amount="incomeActual"
+                    :expected="incomePlanned"
+                    expected-label="attese"
+                />
+                <BudgetSummaryRing
+                    class="z-10 -translate-y-4"
+                    size="lg"
+                    accent
+                    label="Saldo"
+                    :amount="balanceActual"
+                    :expected="balancePlanned"
+                    expected-label="atteso"
+                />
+                <BudgetSummaryRing
+                    class="-ml-6"
+                    label="Uscite"
+                    :amount="expenseActual"
+                    :expected="expensePlanned"
+                    expected-label="attese"
+                    over-is-bad
+                />
+            </div>
+
+            <div class="hidden gap-4 sm:grid sm:grid-cols-3">
+                <div class="rounded-2xl bg-muted/60 px-4 py-3 dark:bg-muted/50">
+                    <p class="text-xs text-muted-foreground">Entrate incassate</p>
+                    <p class="text-2xl font-bold tabular-nums">{{ formatAmount(incomeActual) }}</p>
+                    <p class="text-xs text-muted-foreground tabular-nums">
+                        attese {{ formatAmount(incomePlanned) }}
                     </p>
-                    <p class="text-xs text-muted-foreground">effettivo</p>
-                    <div class="mt-2 flex items-baseline justify-between gap-2 border-t pt-2 text-xs">
-                        <span class="text-muted-foreground">Previsto</span>
-                        <span
-                            class="font-medium tabular-nums"
-                            :class="balancePlanned >= 0 ? '' : 'text-red-600'"
-                        >
-                            {{ formatCurrency(balancePlanned) }}
-                        </span>
-                    </div>
+                </div>
+                <div class="rounded-2xl bg-muted/60 px-4 py-3 dark:bg-muted/50">
+                    <p class="text-xs text-muted-foreground">Uscite</p>
+                    <p class="text-2xl font-bold tabular-nums">{{ formatAmount(expenseActual) }}</p>
+                    <p class="text-xs text-muted-foreground tabular-nums">
+                        attese {{ formatAmount(expensePlanned) }}
+                    </p>
+                </div>
+                <div class="rounded-2xl bg-muted/60 px-4 py-3 dark:bg-muted/50">
+                    <p class="text-xs text-muted-foreground">Saldo effettivo</p>
+                    <p
+                        class="text-2xl font-bold tabular-nums"
+                        :class="balanceActual >= 0 ? 'text-green-600' : 'text-red-500'"
+                    >
+                        {{ formatAmount(balanceActual) }}
+                    </p>
+                    <p class="text-xs text-muted-foreground tabular-nums">
+                        atteso {{ formatAmount(balancePlanned) }}
+                    </p>
                 </div>
             </div>
 
             <div>
-                <div class="mb-1 flex items-center justify-between">
+                <div class="mb-1 flex items-baseline justify-between">
                     <span class="text-sm text-muted-foreground">Uscite sulle entrate</span>
-                    <span class="text-sm font-semibold">{{ budgetUsage.toFixed(0) }}%</span>
+                    <span class="text-sm font-semibold tabular-nums">{{ budgetUsage.toFixed(0) }}%</span>
                 </div>
-                <div class="h-2 overflow-hidden rounded-full bg-muted">
+                <div class="h-2.5 overflow-hidden rounded-sm bg-foreground/15">
                     <div
-                        class="h-full transition-all"
+                        class="h-full rounded-sm transition-all"
                         :style="{
                             width: `${Math.min(budgetUsage, 100)}%`,
                             backgroundColor: budgetUsage > 100 ? '#ef4444' : '#10b981',
                         }"
                     />
                 </div>
-                <p class="mt-2 text-xs text-muted-foreground">
-                    {{ formatCurrency(expenseActual) }} di uscite su
-                    {{ formatCurrency(budgetBase) }} {{ budgetBaseLabel }}
+                <p class="mt-2 text-xs text-muted-foreground tabular-nums">
+                    {{ formatAmount(expenseActual) }} di uscite su
+                    {{ formatAmount(budgetBase) }} {{ budgetBaseLabel }}
                 </p>
             </div>
 
             <BudgetExpenseSummary
-                :categories="categoriesOf('expense')"
+                :categories="categories"
                 :planned="budgetData"
                 :actual="expenseData"
             />
-
-            <p
-                v-if="saveStatus !== 'idle'"
-                class="flex items-center justify-center gap-2 text-xs text-muted-foreground"
-            >
-                <Spinner v-if="saveStatus === 'saving'" class="size-3" />
-                <Check v-else-if="saveStatus === 'saved'" class="size-3 text-green-600" />
-                {{ saveStatusLabel }}
-            </p>
         </div>
 
-        <!-- Entrate e uscite -->
-        <section v-for="section in sections" :key="section.direction" class="space-y-3">
-            <div class="flex items-center justify-between gap-4">
-                <h2 class="font-semibold">{{ section.title }}</h2>
-                <Button variant="outline" size="sm" @click="openAddCategory(section.direction)">
-                    <Plus class="mr-2 size-4" />
-                    {{ section.addLabel }}
+        <!-- Entrate e uscite: un blocco per verso -->
+        <section
+            v-for="section in sections"
+            :key="section.direction"
+            class="rounded-2xl bg-muted/60 dark:bg-muted/50"
+        >
+            <div class="flex items-start justify-between gap-4 px-5 pt-5">
+                <h2 class="text-xl font-bold">
+                    {{ section.title }}
+                    <span class="text-base font-normal text-muted-foreground">(EUR)</span>
+                </h2>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    class="-mr-2 text-muted-foreground"
+                    :title="section.addLabel"
+                    @click="openAddCategory(section.direction)"
+                >
+                    <Plus class="mr-1 size-4" />
+                    Categoria
                 </Button>
             </div>
 
-            <div v-if="section.categories.length" class="space-y-2">
-                <BudgetCategoryCard
-                    v-for="category in section.categories"
+            <p class="mt-3 border-t border-border/60 px-5 pt-3 font-semibold">
+                {{ monthLabel }}
+            </p>
+
+            <div v-if="section.categories.length" class="pb-2">
+                <BudgetCategoryRow
+                    v-for="(category, index) in section.categories"
                     :key="category.id"
                     :category="category"
+                    :position="index + 1"
+                    :month-name="monthName"
                     :planned="budgetData"
                     :actual="expenseData"
-                    :expanded="expandedCategories.has(category.id)"
+                    :expanded="expandedCategoryId === category.id"
                     @toggle="toggleCategory(category.id)"
                     @update="updateBudgetLine"
                     @flush="flushSave()"
                     @add-subcategory="openAddSubcategory(category.id)"
-                    @delete-category="deleteCategory(category)"
+                    @manage="openCategoryManager(category)"
                     @delete-subcategory="deleteSubcategory(category, $event)"
                 />
             </div>
 
-            <div v-else class="rounded-xl border border-dashed bg-muted dark:bg-muted/30 p-6 text-center">
-                <p class="text-sm text-muted-foreground">{{ section.emptyLabel }}</p>
+            <p v-else class="px-5 py-6 text-center text-sm text-muted-foreground">
+                {{ section.emptyLabel }}
+            </p>
+
+            <div
+                v-if="section.categories.length"
+                class="flex items-baseline justify-between gap-4 border-t border-border/60 px-5 py-4 font-semibold"
+            >
+                <span>{{ section.totalLabel }}</span>
+                <span
+                    class="tabular-nums"
+                    :class="isOverspent(section.direction, section.planned - section.actual)
+                        ? 'text-red-500'
+                        : ''"
+                >
+                    {{ residualLabel(section.direction, section.planned - section.actual) }}
+                    <span
+                        :class="isOverspent(section.direction, section.planned - section.actual)
+                            ? ''
+                            : 'font-normal text-muted-foreground'"
+                    >
+                        / {{ formatAmount(section.planned) }}
+                    </span>
+                </span>
             </div>
         </section>
 
         <!-- Movimenti del mese -->
-        <div class="rounded-lg border bg-card">
-            <div class="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">
-                <div>
-                    <h3 class="font-semibold">Movimenti</h3>
-                    <p class="text-xs text-muted-foreground">
-                        <template v-if="transactionFilter === 'all'">
-                            {{ transactions.length }} registrati a {{ monthLabel.toLowerCase() }}
-                        </template>
-                        <template v-else>
-                            {{ filteredTransactions.length }} di {{ transactions.length }} a
-                            {{ monthLabel.toLowerCase() }}
-                        </template>
-                    </p>
-                </div>
+        <div class="rounded-2xl bg-muted/60 dark:bg-muted/50">
+            <div
+                class="flex flex-nowrap items-center justify-between gap-3 px-5 py-4"
+                :class="isTransactionsOpen ? 'border-b border-border/60' : ''"
+            >
+                <button
+                    class="flex min-w-0 items-center gap-2 text-left"
+                    :aria-expanded="isTransactionsOpen"
+                    @click="isTransactionsOpen = !isTransactionsOpen"
+                >
+                    <span class="min-w-0 truncate text-xl font-bold">
+                        Movimenti ({{ filteredTransactions.length }})
+                    </span>
+                    <ChevronDown
+                        class="size-4 shrink-0 text-muted-foreground transition-transform"
+                        :class="{ 'rotate-180': isTransactionsOpen }"
+                    />
+                </button>
 
-                <div class="flex items-center gap-3">
-                    <Select v-if="transactionCategories.length" v-model="transactionFilter">
-                        <SelectTrigger class="h-8 w-44 text-xs">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">Tutte le categorie</SelectItem>
-                            <SelectItem
-                                v-for="category in transactionCategories"
-                                :key="category.id"
-                                :value="category.id"
-                            >
-                                <span class="flex items-center gap-2">
-                                    <span
-                                        class="size-2.5 shrink-0 rounded-full"
-                                        :style="{ backgroundColor: category.color }"
-                                    />
-                                    {{ category.name }}
-                                </span>
-                            </SelectItem>
-                        </SelectContent>
-                    </Select>
-
-                    <p
-                        class="text-sm font-semibold"
-                        :class="filteredTotal >= 0 ? 'text-green-600' : 'text-red-600'"
-                    >
-                        {{ formatCurrency(filteredTotal) }}
-                    </p>
-                </div>
+                <Select v-if="transactionCategories.length" v-model="transactionFilter">
+                    <SelectTrigger class="h-8 w-32 shrink-0 text-xs sm:w-44">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Tutte le categorie</SelectItem>
+                        <SelectItem
+                            v-for="category in transactionCategories"
+                            :key="category.id"
+                            :value="category.id"
+                        >
+                            <span class="flex items-center gap-2">
+                                <span
+                                    class="size-2.5 shrink-0 rounded-full"
+                                    :style="{ backgroundColor: category.color }"
+                                />
+                                {{ category.name }}
+                            </span>
+                        </SelectItem>
+                    </SelectContent>
+                </Select>
             </div>
 
-            <div v-if="transactionDays.length" class="divide-y">
+            <div v-if="isTransactionsOpen && transactionDays.length" class="divide-y">
                 <div v-for="day in transactionDays" :key="day.label">
-                    <div class="flex items-center justify-between gap-4 bg-muted px-5 py-2 dark:bg-muted/40">
+                    <div class="flex items-center justify-between gap-4 bg-foreground/5 px-5 py-2">
                         <span class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                             {{ day.label }}
                         </span>
-                        <span class="text-xs text-muted-foreground">{{ formatCurrency(day.total) }}</span>
+                        <span class="text-xs text-muted-foreground tabular-nums">{{ formatAmount(day.total) }}</span>
                     </div>
 
                     <div
                         v-for="transaction in day.items"
                         :key="transaction.id"
-                        class="group flex items-center gap-3 px-5 py-3 hover:bg-muted/30"
+                        class="group flex items-center gap-3 px-5 py-3 hover:bg-foreground/5"
                     >
                         <div
                             class="flex size-9 shrink-0 items-center justify-center rounded-full"
@@ -836,26 +1062,65 @@ const transactionDays = computed(() => {
                         </div>
 
                         <p
-                            class="shrink-0 text-sm font-semibold"
+                            class="shrink-0 text-sm font-semibold tabular-nums"
                             :class="transaction.direction === 'income' ? 'text-green-600' : ''"
                         >
-                            {{ transaction.direction === 'income' ? '+' : '' }}{{ formatCurrency(signedAmount(transaction)) }}
+                            {{ transaction.direction === 'income' ? '+' : '' }}{{ formatAmount(signedAmount(transaction)) }}
                         </p>
 
-                        <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            class="shrink-0 text-muted-foreground opacity-60 transition-opacity hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
-                            :title="`Elimina il movimento di ${formatCurrency(transaction.amount)}`"
-                            @click="deleteTransaction(transaction)"
-                        >
-                            <Trash2 class="size-4" />
-                        </Button>
+                        <!-- Su mobile due icone rubano spazio alla descrizione. -->
+                        <DropdownMenu>
+                            <DropdownMenuTrigger as-child>
+                                <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    class="shrink-0 text-muted-foreground sm:hidden"
+                                    :title="`Azioni sul movimento di ${formatCurrency(transaction.amount)}`"
+                                >
+                                    <EllipsisVertical class="size-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem @click="openEditMovement(transaction)">
+                                    <Pencil class="size-4" />
+                                    Modifica
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    variant="destructive"
+                                    @click="deleteTransaction(transaction)"
+                                >
+                                    <Trash2 class="size-4" />
+                                    Elimina
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+
+                        <div class="-mr-1 hidden shrink-0 items-center sm:flex">
+                            <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                class="text-muted-foreground opacity-60 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+                                :title="`Modifica il movimento di ${formatCurrency(transaction.amount)}`"
+                                @click="openEditMovement(transaction)"
+                            >
+                                <Pencil class="size-4" />
+                            </Button>
+
+                            <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                class="text-muted-foreground opacity-60 transition-opacity hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+                                :title="`Elimina il movimento di ${formatCurrency(transaction.amount)}`"
+                                @click="deleteTransaction(transaction)"
+                            >
+                                <Trash2 class="size-4" />
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div v-else class="px-5 py-10 text-center">
+            <div v-else-if="isTransactionsOpen" class="px-5 py-10 text-center">
                 <template v-if="transactionFilter === 'all'">
                     <p class="text-sm text-muted-foreground">
                         Nessun movimento registrato questo mese.
@@ -878,23 +1143,43 @@ const transactionDays = computed(() => {
 
     <!-- Bottone fisso: nuovo movimento -->
     <Button
-        class="fixed bottom-[calc(5.5rem_+_env(safe-area-inset-bottom))] right-4 z-40 h-14 gap-3 rounded-2xl px-6 text-base font-semibold shadow-lg md:bottom-6 md:right-6"
+        size="icon"
+        class="fixed bottom-[calc(5.5rem_+_env(safe-area-inset-bottom))] right-4 z-40 size-14 rounded-full shadow-lg md:bottom-6 md:right-6"
+        title="Nuovo movimento"
+        aria-label="Nuovo movimento"
         @click="openAddMovement()"
     >
-        Nuovo movimento
-        <Plus class="size-5" />
+        <Plus class="size-6" />
     </Button>
+
+    <!-- Sheet: gestione di una categoria e dei suoi movimenti -->
+    <BudgetCategoryManager
+        v-model:open="isCategoryManagerOpen"
+        :category="managedCategory"
+        :planned="budgetData"
+        :actual="expenseData"
+        :transactions="managedTransactions"
+        :month-label="monthLabel"
+        :year="currentYear"
+        :month="currentMonth"
+        @update-planned="updateBudgetLine"
+        @flush="flushSave()"
+        @add-subcategory="addSubcategoryFromManager"
+        @delete-subcategory="managedCategory && deleteSubcategory(managedCategory, $event)"
+        @delete-category="deleteCategoryFromManager"
+        @delete-transaction="deleteTransaction"
+    />
 
     <!-- Sheet: Aggiungi Categoria -->
     <Sheet v-model:open="isAddCategoryOpen">
-        <SheetContent>
+        <SheetContent class="overflow-y-auto">
             <SheetHeader>
                 <SheetTitle>
                     {{ categoryForm.type === 'income' ? 'Entrata' : 'Uscita' }} solo per {{ monthLabel }}
                 </SheetTitle>
             </SheetHeader>
 
-            <div class="mt-6 space-y-4">
+            <div class="space-y-4 px-4 pb-6">
                 <div class="grid gap-2">
                     <Label for="category-name">Nome</Label>
                     <Input
@@ -910,20 +1195,7 @@ const transactionDays = computed(() => {
 
                 <div class="grid gap-2">
                     <Label>Colore</Label>
-                    <div class="grid grid-cols-5 gap-2">
-                        <button
-                            v-for="color in predefinedColors"
-                            :key="color"
-                            class="rounded border-2 transition-transform"
-                            :class="{
-                                'border-foreground scale-110': categoryForm.color === color,
-                                'border-transparent': categoryForm.color !== color,
-                            }"
-                            :style="{ backgroundColor: color }"
-                            style="height: 32px"
-                            @click="categoryForm.color = color"
-                        />
-                    </div>
+                    <BudgetColorPicker v-model="categoryForm.color" />
                 </div>
 
                 <Button class="mt-6 w-full" :disabled="categoryForm.processing" @click="submitCategory">
@@ -943,7 +1215,7 @@ const transactionDays = computed(() => {
                 </DialogTitle>
             </DialogHeader>
 
-            <div class="mt-6 space-y-4">
+            <div class="mt-2 space-y-4">
                 <div class="grid gap-2">
                     <Label for="subcategory-name">Nome</Label>
                     <Input
@@ -972,10 +1244,12 @@ const transactionDays = computed(() => {
     <Dialog v-model:open="isAddMovementOpen">
         <DialogContent>
             <DialogHeader>
-                <DialogTitle>Nuovo movimento · {{ monthLabel }}</DialogTitle>
+                <DialogTitle>
+                    {{ editingTransaction ? 'Modifica movimento' : 'Nuovo movimento' }} · {{ monthLabel }}
+                </DialogTitle>
             </DialogHeader>
 
-            <div class="mt-6 space-y-4">
+            <div class="mt-2 space-y-4">
                 <div class="grid grid-cols-2 gap-2 rounded-lg bg-muted dark:bg-muted/50 p-1">
                     <button
                         class="rounded-md px-3 py-2 text-sm font-medium transition-colors"
@@ -1046,38 +1320,72 @@ const transactionDays = computed(() => {
                     <p v-if="movementForm.errors.budget_subcategory_id" class="text-sm text-destructive">
                         {{ movementForm.errors.budget_subcategory_id }}
                     </p>
+
+                    <!-- La voce che serve può non esistere ancora: si crea da qui. -->
+                    <template v-if="movementCategory">
+                        <Button
+                            v-if="!isAddingMovementSubcategory"
+                            variant="ghost"
+                            size="sm"
+                            class="justify-start px-0 text-muted-foreground"
+                            @click="isAddingMovementSubcategory = true"
+                        >
+                            <Plus class="mr-1 size-4" />
+                            Nuova voce in {{ movementCategory.name }}
+                        </Button>
+
+                        <div v-else class="grid gap-2">
+                            <div class="flex items-center gap-2">
+                                <Input
+                                    v-model="quickSubcategoryForm.name"
+                                    placeholder="Nome della voce"
+                                    aria-label="Nome della nuova voce"
+                                    @keyup.enter="createMovementSubcategory"
+                                />
+                                <Button
+                                    size="sm"
+                                    class="shrink-0"
+                                    :disabled="quickSubcategoryForm.processing || quickSubcategoryForm.name.trim() === ''"
+                                    @click="createMovementSubcategory"
+                                >
+                                    Crea
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    class="shrink-0"
+                                    @click="resetQuickSubcategory"
+                                >
+                                    Annulla
+                                </Button>
+                            </div>
+                            <p v-if="quickSubcategoryForm.errors.name" class="text-sm text-destructive">
+                                {{ quickSubcategoryForm.errors.name }}
+                            </p>
+                            <p class="text-xs text-muted-foreground">
+                                Vale solo per {{ monthLabel.toLowerCase() }}.
+                            </p>
+                        </div>
+                    </template>
                 </div>
 
                 <p v-if="movementSubcategory" class="rounded-md bg-muted dark:bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
                     <template v-if="movementDirection === 'income'">
-                        Atteso {{ formatCurrency(planned(movementSubcategory.id)) }} · già incassato
-                        {{ formatCurrency(actual(movementSubcategory.id)) }}
+                        Atteso {{ formatAmount(planned(movementSubcategory.id)) }} · già incassato
+                        {{ formatAmount(actual(movementSubcategory.id)) }}
                     </template>
                     <template v-else>
-                        Costo atteso {{ formatCurrency(planned(movementSubcategory.id)) }} · già speso
-                        {{ formatCurrency(actual(movementSubcategory.id)) }} · rimane
+                        Atteso {{ formatAmount(planned(movementSubcategory.id)) }} · già speso
+                        {{ formatAmount(actual(movementSubcategory.id)) }} · rimane
                         <span
                             :class="planned(movementSubcategory.id) - actual(movementSubcategory.id) >= 0
                                 ? 'text-green-600'
-                                : 'text-red-600'"
+                                : 'text-red-500'"
                         >
-                            {{ formatCurrency(planned(movementSubcategory.id) - actual(movementSubcategory.id)) }}
+                            {{ formatAmount(planned(movementSubcategory.id) - actual(movementSubcategory.id)) }}
                         </span>
                     </template>
                 </p>
-
-                <div class="grid gap-2">
-                    <Label for="movement-amount">Importo</Label>
-                    <Input
-                        id="movement-amount"
-                        v-model="movementForm.amount"
-                        inputmode="decimal"
-                        placeholder="0.00"
-                    />
-                    <p v-if="movementForm.errors.amount" class="text-sm text-destructive">
-                        {{ movementForm.errors.amount }}
-                    </p>
-                </div>
 
                 <div class="grid gap-2">
                     <Label for="movement-description">Descrizione</Label>
@@ -1088,14 +1396,39 @@ const transactionDays = computed(() => {
                     />
                 </div>
 
+                <div class="grid gap-2">
+                    <Label for="movement-amount">Importo</Label>
+                    <Input
+                        id="movement-amount"
+                        v-model="movementForm.amount"
+                        inputmode="decimal"
+                        placeholder="0,00"
+                    />
+                    <p v-if="movementForm.errors.amount" class="text-sm text-destructive">
+                        {{ movementForm.errors.amount }}
+                    </p>
+                </div>
+
+                <!-- I controlli nativi di data e ora hanno una larghezza minima:
+                     su schermi stretti vanno stretti di padding e testo. -->
                 <div class="grid grid-cols-2 gap-2">
                     <div class="grid gap-2">
                         <Label for="movement-date">Data</Label>
-                        <Input id="movement-date" v-model="movementDate" type="date" />
+                        <Input
+                            id="movement-date"
+                            v-model="movementDate"
+                            type="date"
+                            class="px-2 text-center text-sm"
+                        />
                     </div>
                     <div class="grid gap-2">
                         <Label for="movement-time">Ora</Label>
-                        <Input id="movement-time" v-model="movementTime" type="time" />
+                        <Input
+                            id="movement-time"
+                            v-model="movementTime"
+                            type="time"
+                            class="px-2 text-center text-sm"
+                        />
                     </div>
                 </div>
 
@@ -1108,7 +1441,7 @@ const transactionDays = computed(() => {
                     :disabled="movementForm.processing || !canSubmitMovement"
                     @click="submitMovement"
                 >
-                    Registra movimento
+                    {{ editingTransaction ? 'Salva movimento' : 'Registra movimento' }}
                 </Button>
             </div>
         </DialogContent>

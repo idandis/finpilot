@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { ChevronDown, Plus, Trash2 } from '@lucide/vue';
+import { ChevronRight, Pencil, Plus, Trash2 } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import budgetCategories from '@/routes/budget-categories';
 import budgetSubcategories from '@/routes/budget-subcategories';
+import BudgetColorPicker from '@/components/budget/BudgetColorPicker.vue';
 import Heading from '@/components/Heading.vue';
-import { readableTextOn } from '@/lib/budget-colors';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -55,10 +55,17 @@ const groups = computed(() => [
     },
 ]);
 
+const positionLabel = (index: number) => String(index + 1).padStart(2, '0');
+
 const expandedCategories = ref<Set<number>>(new Set());
-const isAddCategoryOpen = ref(false);
-const isAddSubcategoryOpen = ref(false);
+const isCategorySheetOpen = ref(false);
+const isSubcategorySheetOpen = ref(false);
 const selectedCategory = ref<Category | null>(null);
+
+// Gli stessi pannelli servono sia a creare sia a modificare: quando queste
+// sono valorizzate si sta modificando quella riga.
+const editingCategory = ref<Category | null>(null);
+const editingSubcategory = ref<Subcategory | null>(null);
 
 const categoryForm = useForm({
     name: '',
@@ -72,11 +79,6 @@ const subcategoryForm = useForm({
     scope: 'global',
 });
 
-const predefinedColors = [
-    '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
-    '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#06b6d4',
-];
-
 const toggleCategory = (category: Category) => {
     if (expandedCategories.value.has(category.id)) {
         expandedCategories.value.delete(category.id);
@@ -86,45 +88,82 @@ const toggleCategory = (category: Category) => {
 };
 
 const openAddCategory = (type: Direction) => {
+    editingCategory.value = null;
     categoryForm.reset();
     categoryForm.clearErrors();
     categoryForm.type = type;
-    isAddCategoryOpen.value = true;
+    isCategorySheetOpen.value = true;
+};
+
+const openEditCategory = (category: Category) => {
+    editingCategory.value = category;
+    categoryForm.reset();
+    categoryForm.clearErrors();
+    categoryForm.name = category.name;
+    categoryForm.color = category.color;
+    categoryForm.type = category.type;
+    isCategorySheetOpen.value = true;
 };
 
 const openAddSubcategory = (category: Category) => {
     selectedCategory.value = category;
+    editingSubcategory.value = null;
     subcategoryForm.reset();
     subcategoryForm.clearErrors();
-    isAddSubcategoryOpen.value = true;
+    isSubcategorySheetOpen.value = true;
+};
+
+const openEditSubcategory = (category: Category, subcategory: Subcategory) => {
+    selectedCategory.value = category;
+    editingSubcategory.value = subcategory;
+    subcategoryForm.reset();
+    subcategoryForm.clearErrors();
+    subcategoryForm.name = subcategory.name;
+    isSubcategorySheetOpen.value = true;
+};
+
+const closeCategorySheet = () => {
+    isCategorySheetOpen.value = false;
+    editingCategory.value = null;
+    categoryForm.reset();
+};
+
+const closeSubcategorySheet = () => {
+    isSubcategorySheetOpen.value = false;
+    editingSubcategory.value = null;
+    subcategoryForm.reset();
 };
 
 const submitCategory = () => {
-    categoryForm.post(budgetCategories.store.url(), {
-        preserveScroll: true,
-        onSuccess: () => {
-            isAddCategoryOpen.value = false;
-            categoryForm.reset();
-        },
-    });
+    const options = { preserveScroll: true, onSuccess: closeCategorySheet };
+
+    if (editingCategory.value) {
+        categoryForm.put(budgetCategories.update.url(editingCategory.value.id), options);
+
+        return;
+    }
+
+    categoryForm.post(budgetCategories.store.url(), options);
 };
 
 const submitSubcategory = () => {
+    const options = { preserveScroll: true, onSuccess: closeSubcategorySheet };
+
+    if (editingSubcategory.value) {
+        subcategoryForm.patch(budgetSubcategories.update.url(editingSubcategory.value.id), options);
+
+        return;
+    }
+
     if (!selectedCategory.value) return;
 
-    subcategoryForm.post(budgetCategories.subcategories.store.url(selectedCategory.value.id), {
-        preserveScroll: true,
-        onSuccess: () => {
-            isAddSubcategoryOpen.value = false;
-            subcategoryForm.reset();
-        },
-    });
+    subcategoryForm.post(budgetCategories.subcategories.store.url(selectedCategory.value.id), options);
 };
 
 const deleteSubcategory = (subcategory: Subcategory) => {
     const confirmed = confirm(
         `Eliminare "${subcategory.name}" da tutti i mesi? `
-        + 'Verranno persi anche gli importi previsti e i movimenti collegati.',
+        + 'Verranno persi anche gli importi attesi e i movimenti collegati.',
     );
 
     if (!confirmed) return;
@@ -135,7 +174,7 @@ const deleteSubcategory = (subcategory: Subcategory) => {
 const deleteCategory = (category: Category) => {
     const confirmed = confirm(
         `Eliminare "${category.name}" e le sue voci da tutti i mesi? `
-        + 'Verranno persi anche gli importi previsti e i movimenti collegati.',
+        + 'Verranno persi anche gli importi attesi e i movimenti collegati.',
     );
 
     if (!confirmed) return;
@@ -147,60 +186,83 @@ const deleteCategory = (category: Category) => {
 <template>
     <Head title="Configurazione Budget" />
 
-    <div class="mx-auto max-w-2xl p-4">
-        <Heading
-            title="Configurazione Budget"
-            description="La struttura comune a tutti i mesi. Le voci valide per un mese solo si creano dal budget di quel mese."
-        />
+    <div class="mx-auto flex w-full max-w-[64rem] flex-col space-y-6 p-4 pb-16">
+        <Heading title="Configurazione Budget" />
 
-        <div class="mt-6 space-y-3">
-            <template v-for="group in groups" :key="group.type">
-                <div class="flex items-center justify-between gap-4 pt-2">
-                    <h2 class="font-semibold">{{ group.title }}</h2>
-                    <Button size="sm" variant="outline" @click="openAddCategory(group.type)">
-                        <Plus class="mr-2 size-4" />
-                        {{ group.addLabel }}
-                    </Button>
-                </div>
-
-                <p
-                    v-if="group.categories.length === 0"
-                    class="rounded-lg border border-dashed bg-muted dark:bg-muted/30 p-4 text-center text-sm text-muted-foreground"
+        <section
+            v-for="group in groups"
+            :key="group.type"
+            class="rounded-2xl bg-muted/60 dark:bg-muted/50"
+        >
+            <div class="flex items-start justify-between gap-4 px-5 pt-5">
+                <h2 class="text-xl font-bold">{{ group.title }}</h2>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    class="-mr-2 text-muted-foreground"
+                    :title="`Nuova ${group.addLabel.toLowerCase()}`"
+                    @click="openAddCategory(group.type)"
                 >
-                    {{ group.emptyLabel }}
-                </p>
+                    <Plus class="mr-1 size-4" />
+                    Categoria
+                </Button>
+            </div>
 
+            <p class="mt-3 border-t border-border/60 px-5 pt-3 font-semibold">
+                Tutti i mesi
+            </p>
+
+            <div v-if="group.categories.length" class="pb-2">
                 <div
-                    v-for="category in group.categories"
+                    v-for="(category, index) in group.categories"
                     :key="category.id"
-                    class="rounded-lg border bg-card"
+                    class="group/row"
+                    :style="{
+                        backgroundColor: expandedCategories.has(category.id)
+                            ? `${category.color}12`
+                            : 'transparent',
+                    }"
                 >
-                    <div class="flex items-center gap-2 pr-2">
+                    <div class="flex items-center gap-1 pr-2">
                         <button
-                            class="flex flex-1 items-center gap-3 px-4 py-3 hover:bg-muted/50"
+                            class="flex min-w-0 flex-1 items-center gap-3 py-3 pl-5 text-left"
                             @click="toggleCategory(category)"
                         >
-                            <div
-                                class="flex size-8 shrink-0 items-center justify-center rounded-lg text-sm font-semibold tabular-nums"
-                                :style="{
-                                    backgroundColor: category.color,
-                                    color: readableTextOn(category.color),
-                                }"
-                                :title="`${category.subcategories.length} voci`"
-                            >
-                                {{ category.subcategories.length }}
-                            </div>
-                            <span class="flex-1 text-left font-medium">{{ category.name }}</span>
-                            <ChevronDown
-                                class="size-4 shrink-0 transition-transform"
-                                :class="{ 'rotate-180': expandedCategories.has(category.id) }"
+                            <span class="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+                                <span
+                                    class="size-2.5 shrink-0 rounded-full"
+                                    :style="{ backgroundColor: category.color }"
+                                />
+                                <span class="truncate font-medium">
+                                    <span class="tabular-nums">{{ positionLabel(index) }}.</span>
+                                    {{ category.name }}
+                                </span>
+                            </span>
+
+                            <span class="shrink-0 text-sm text-muted-foreground tabular-nums">
+                                {{ category.subcategories.length }} voci
+                            </span>
+
+                            <ChevronRight
+                                class="size-4 shrink-0 text-muted-foreground transition-transform"
+                                :class="{ 'rotate-90': expandedCategories.has(category.id) }"
                             />
                         </button>
 
                         <Button
                             variant="ghost"
                             size="icon-sm"
-                            class="shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            class="shrink-0 text-muted-foreground opacity-60 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/row:opacity-100"
+                            :title="`Modifica la categoria ${category.name}`"
+                            @click="openEditCategory(category)"
+                        >
+                            <Pencil class="size-4" />
+                        </Button>
+
+                        <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            class="shrink-0 text-muted-foreground opacity-60 transition-opacity hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 group-hover/row:opacity-100"
                             :title="`Elimina la categoria ${category.name}`"
                             @click="deleteCategory(category)"
                         >
@@ -210,58 +272,77 @@ const deleteCategory = (category: Category) => {
 
                     <div
                         v-if="expandedCategories.has(category.id)"
-                        class="border-t bg-muted/30 px-4 py-3"
+                        class="border-t border-border/60 pb-3"
                     >
-                        <div class="mb-4 space-y-2">
-                            <div
-                                v-for="sub in category.subcategories"
-                                :key="sub.id"
-                                class="flex items-center justify-between rounded px-2 py-2 hover:bg-muted"
-                            >
-                                <span class="text-sm">{{ sub.name }}</span>
-                                <Button
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                                    @click="deleteSubcategory(sub)"
-                                >
-                                    <Trash2 class="size-4" />
-                                </Button>
-                            </div>
+                        <div
+                            v-for="sub in category.subcategories"
+                            :key="sub.id"
+                            class="flex items-center gap-1.5 py-2 pl-4 pr-2 sm:gap-3 sm:px-5"
+                        >
+                            <span class="min-w-0 flex-1 truncate text-sm sm:pl-4">{{ sub.name }}</span>
 
-                            <p
-                                v-if="category.subcategories.length === 0"
-                                class="px-2 py-2 text-sm text-muted-foreground"
+                            <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                class="w-8 shrink-0 text-muted-foreground hover:text-foreground"
+                                :title="`Modifica ${sub.name}`"
+                                @click="openEditSubcategory(category, sub)"
                             >
-                                Nessuna voce.
-                            </p>
+                                <Pencil class="size-4" />
+                            </Button>
+
+                            <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                class="w-8 shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                :title="`Elimina ${sub.name}`"
+                                @click="deleteSubcategory(sub)"
+                            >
+                                <Trash2 class="size-4" />
+                            </Button>
                         </div>
 
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            class="w-full"
-                            @click="openAddSubcategory(category)"
+                        <p
+                            v-if="category.subcategories.length === 0"
+                            class="px-5 py-3 text-sm text-muted-foreground"
                         >
-                            <Plus class="mr-2 size-3" />
-                            {{ category.type === 'income' ? 'Voce' : 'Sottocategoria' }}
-                        </Button>
+                            Nessuna voce.
+                        </p>
+
+                        <div class="px-2 sm:px-3">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                class="text-muted-foreground"
+                                @click="openAddSubcategory(category)"
+                            >
+                                <Plus class="mr-1 size-4" />
+                                Aggiungi alla lista
+                            </Button>
+                        </div>
                     </div>
                 </div>
-            </template>
-        </div>
+            </div>
+
+            <p v-else class="px-5 py-6 text-center text-sm text-muted-foreground">
+                {{ group.emptyLabel }}
+            </p>
+        </section>
     </div>
 
-    <!-- Sheet: Aggiungi Categoria -->
-    <Sheet v-model:open="isAddCategoryOpen">
-        <SheetContent>
+    <!-- Sheet: Categoria (nuova o da modificare) -->
+    <Sheet v-model:open="isCategorySheetOpen">
+        <SheetContent class="overflow-y-auto">
             <SheetHeader>
                 <SheetTitle>
-                    Nuova {{ categoryForm.type === 'income' ? 'entrata' : 'uscita' }} comune
+                    <template v-if="editingCategory">Modifica “{{ editingCategory.name }}”</template>
+                    <template v-else>
+                        Nuova {{ categoryForm.type === 'income' ? 'entrata' : 'uscita' }} comune
+                    </template>
                 </SheetTitle>
             </SheetHeader>
 
-            <div class="mt-6 space-y-4">
+            <div class="space-y-4 px-4 pb-6">
                 <div class="grid gap-2">
                     <Label for="category-name">Nome</Label>
                     <Input
@@ -277,41 +358,31 @@ const deleteCategory = (category: Category) => {
 
                 <div class="grid gap-2">
                     <Label>Colore</Label>
-                    <div class="grid grid-cols-5 gap-2">
-                        <button
-                            v-for="color in predefinedColors"
-                            :key="color"
-                            class="rounded border-2 transition-transform"
-                            :class="{
-                                'border-foreground scale-110': categoryForm.color === color,
-                                'border-transparent': categoryForm.color !== color,
-                            }"
-                            :style="{ backgroundColor: color }"
-                            style="height: 32px"
-                            @click="categoryForm.color = color"
-                        />
-                    </div>
+                    <BudgetColorPicker v-model="categoryForm.color" />
                 </div>
 
                 <p class="text-xs text-muted-foreground">Visibile in tutti i mesi.</p>
 
                 <Button class="mt-6 w-full" :disabled="categoryForm.processing" @click="submitCategory">
-                    Crea Categoria
+                    {{ editingCategory ? 'Salva' : 'Crea Categoria' }}
                 </Button>
             </div>
         </SheetContent>
     </Sheet>
 
-    <!-- Sheet: Aggiungi Sottocategoria -->
-    <Sheet v-model:open="isAddSubcategoryOpen">
-        <SheetContent>
+    <!-- Sheet: Voce (nuova o da modificare) -->
+    <Sheet v-model:open="isSubcategorySheetOpen">
+        <SheetContent class="overflow-y-auto">
             <SheetHeader>
                 <SheetTitle>
-                    Nuova {{ selectedCategory?.type === 'income' ? 'voce' : 'sottocategoria' }} comune
+                    <template v-if="editingSubcategory">Modifica “{{ editingSubcategory.name }}”</template>
+                    <template v-else>
+                        Nuova {{ selectedCategory?.type === 'income' ? 'voce' : 'sottocategoria' }} comune
+                    </template>
                 </SheetTitle>
             </SheetHeader>
 
-            <div class="mt-6 space-y-4">
+            <div class="space-y-4 px-4 pb-6">
                 <div class="grid gap-2">
                     <Label for="subcategory-name">Nome</Label>
                     <Input
@@ -334,7 +405,7 @@ const deleteCategory = (category: Category) => {
                     :disabled="subcategoryForm.processing"
                     @click="submitSubcategory"
                 >
-                    Crea
+                    {{ editingSubcategory ? 'Salva' : 'Crea' }}
                 </Button>
             </div>
         </SheetContent>

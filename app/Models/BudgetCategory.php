@@ -33,9 +33,12 @@ class BudgetCategory extends Model
         return $this->belongsTo(MonthlyBudget::class);
     }
 
+    /** L'ordine manuale vince; a parità, le voci restano in ordine di aggiunta. */
     public function subcategories(): HasMany
     {
-        return $this->hasMany(BudgetSubcategory::class)->orderBy('order');
+        return $this->hasMany(BudgetSubcategory::class)
+            ->orderBy('order')
+            ->orderBy('id');
     }
 
     /** Categorie di entrata oppure di uscita. */

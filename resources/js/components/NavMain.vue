@@ -15,6 +15,7 @@ import {
     SidebarMenuSub,
     SidebarMenuSubButton,
     SidebarMenuSubItem,
+    useSidebar,
 } from '@/components/ui/sidebar';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import type { NavItem } from '@/types';
@@ -28,6 +29,10 @@ withDefaults(
 );
 
 const { isCurrentUrl } = useCurrentUrl();
+
+// Su mobile il menu copre la pagina: seguito un link non ha più senso restare
+// aperto, e cliccare la voce già attiva non produce nemmeno una navigazione.
+const { setOpenMobile } = useSidebar();
 
 function isGroupActive(item: NavItem): boolean {
     return !!item.items?.some((sub) => sub.href && isCurrentUrl(sub.href));
@@ -45,7 +50,7 @@ function isGroupActive(item: NavItem): boolean {
                         :is-active="isCurrentUrl(item.href!)"
                         :tooltip="item.title"
                     >
-                        <Link :href="item.href!">
+                        <Link :href="item.href!" @click="setOpenMobile(false)">
                             <component :is="item.icon" />
                             <span>{{ item.title }}</span>
                         </Link>
@@ -78,7 +83,7 @@ function isGroupActive(item: NavItem): boolean {
                                         as-child
                                         :is-active="isCurrentUrl(sub.href!)"
                                     >
-                                        <Link :href="sub.href!">
+                                        <Link :href="sub.href!" @click="setOpenMobile(false)">
                                             <component :is="sub.icon" />
                                             <span>{{ sub.title }}</span>
                                         </Link>

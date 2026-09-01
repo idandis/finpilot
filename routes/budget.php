@@ -16,9 +16,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('budget-subcategories/{subcategory}', [BudgetCategoryController::class, 'destroySubcategory'])
         ->name('budget-subcategories.destroy');
 
+    Route::get('monthly-budgets/pdf', [MonthlyBudgetController::class, 'pdf'])
+        ->name('monthly-budgets.pdf');
+
     Route::resource('monthly-budgets', MonthlyBudgetController::class)
         ->only(['index', 'show', 'store', 'update', 'destroy']);
 
     Route::resource('budget-expenses', BudgetExpenseController::class)
-        ->only(['index', 'store', 'destroy']);
+        ->only(['index', 'store', 'update', 'destroy']);
 });

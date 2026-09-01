@@ -202,6 +202,62 @@ class MonthlyBudgetControllerTest extends TestCase
         $this->assertDatabaseCount('budget_expenses', 0);
     }
 
+    public function test_it_updates_a_movement()
+    {
+        $user = User::factory()->create();
+        $august = $this->monthlyBudget($user, 2026, 8);
+        $category = $this->category($user, 'Bollette');
+        $gas = $this->subcategory($category, 'Gas');
+        $luce = $this->subcategory($category, 'Luce');
+
+        $expense = $august->expenses()->create([
+            'budget_subcategory_id' => $gas->id,
+            'amount' => 50,
+            'description' => 'Bolletta',
+            'recorded_at' => '2026-08-14 18:30',
+        ]);
+
+        $this->actingAs($user)->put(route('budget-expenses.update', $expense), [
+            'year' => 2026,
+            'month' => 8,
+            'budget_subcategory_id' => $luce->id,
+            'amount' => 65.5,
+            'description' => 'Conguaglio',
+            'recorded_at' => '2026-08-15 09:00',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('budget_expenses', [
+            'id' => $expense->id,
+            'budget_subcategory_id' => $luce->id,
+            'amount' => 65.5,
+            'description' => 'Conguaglio',
+        ]);
+    }
+
+    public function test_it_refuses_to_update_a_movement_of_another_user()
+    {
+        $owner = User::factory()->create();
+        $intruder = User::factory()->create();
+        $august = $this->monthlyBudget($owner, 2026, 8);
+        $subcategory = $this->subcategory($this->category($owner, 'Bollette'), 'Gas');
+
+        $expense = $august->expenses()->create([
+            'budget_subcategory_id' => $subcategory->id,
+            'amount' => 50,
+            'recorded_at' => '2026-08-14 18:30',
+        ]);
+
+        $this->actingAs($intruder)->put(route('budget-expenses.update', $expense), [
+            'year' => 2026,
+            'month' => 8,
+            'budget_subcategory_id' => $subcategory->id,
+            'amount' => 999,
+            'recorded_at' => '2026-08-15 09:00',
+        ])->assertForbidden();
+
+        $this->assertDatabaseHas('budget_expenses', ['id' => $expense->id, 'amount' => 50]);
+    }
+
     private function monthlyBudget(User $user, int $year, int $month): MonthlyBudget
     {
         return MonthlyBudget::create([

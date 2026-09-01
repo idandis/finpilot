@@ -9,7 +9,9 @@ use App\Models\BudgetSubcategory;
 use App\Models\MonthlyBudget;
 use App\Models\MonthlyBudgetLine;
 use App\Services\Budget\BudgetStructureResolver;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response as HttpResponse;
 use Inertia\Inertia;
 
 class MonthlyBudgetController extends Controller
@@ -80,6 +82,59 @@ class MonthlyBudgetController extends Controller
             'transactions' => $transactions,
             'monthlyBudget' => $monthlyBudget?->id,
         ]);
+    }
+
+    /** Il piano del mese da stampare: categorie, voci e importi attesi. */
+    public function pdf(Request $request): HttpResponse
+    {
+        $now = now();
+        $year = (int) $request->integer('year', $now->year);
+        $month = (int) $request->integer('month', $now->month);
+
+        $user = $request->user();
+        $monthlyBudget = $this->resolver->findMonthlyBudget($user, $year, $month);
+        $categories = $this->resolver->categoriesFor($user, $monthlyBudget);
+
+        $budgetLines = $monthlyBudget
+            ? $monthlyBudget->budgetLines()
+                ->get()
+                ->mapWithKeys(fn ($line) => [$line->budget_subcategory_id => (float) $line->planned_amount])
+            : collect();
+
+        $sections = collect([BudgetCategory::TYPE_INCOME, BudgetCategory::TYPE_EXPENSE])
+            ->map(fn (string $type) => [
+                'title' => $type === BudgetCategory::TYPE_INCOME ? 'Entrate' : 'Uscite',
+                'categories' => $categories
+                    ->where('type', $type)
+                    ->map(fn (BudgetCategory $category) => [
+                        'name' => $category->name,
+                        'color' => $category->color,
+                        'subcategories' => $category->subcategories
+                            ->map(fn (BudgetSubcategory $subcategory) => [
+                                'name' => $subcategory->name,
+                                'planned' => (float) ($budgetLines[$subcategory->id] ?? 0),
+                            ])->values(),
+                        'planned' => $category->subcategories->sum(
+                            fn (BudgetSubcategory $subcategory) => (float) ($budgetLines[$subcategory->id] ?? 0),
+                        ),
+                    ])->values(),
+            ])
+            ->map(fn (array $section) => $section + [
+                'planned' => collect($section['categories'])->sum('planned'),
+            ]);
+
+        $months = [
+            'gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno',
+            'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre',
+        ];
+
+        $pdf = Pdf::loadView('budget.pdf', [
+            'monthLabel' => "{$months[$month - 1]} {$year}",
+            'sections' => $sections,
+            'generatedAt' => $now->format('d/m/Y H:i'),
+        ]);
+
+        return $pdf->download("budget-{$year}-".str_pad((string) $month, 2, '0', STR_PAD_LEFT).'.pdf');
     }
 
     public function show(Request $request, MonthlyBudget $monthlyBudget)

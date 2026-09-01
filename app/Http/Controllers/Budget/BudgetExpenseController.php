@@ -71,16 +71,7 @@ class BudgetExpenseController extends Controller
         $user = $request->user();
         $monthlyBudget = $this->resolver->firstOrCreateMonthlyBudget($user, $validated['year'], $validated['month']);
 
-        // La sottocategoria deve essere dell'utente e valida in questo mese.
-        $usable = BudgetSubcategory::query()
-            ->where('id', $validated['budget_subcategory_id'])
-            ->whereHas('category', fn ($query) => $query->where('user_id', $user->id))
-            ->where(fn ($query) => $query
-                ->whereNull('monthly_budget_id')
-                ->orWhere('monthly_budget_id', $monthlyBudget->id))
-            ->exists();
-
-        if (! $usable) {
+        if (! $this->subcategoryUsableIn($user->id, (int) $validated['budget_subcategory_id'], $monthlyBudget->id)) {
             return back()->withErrors(['budget_subcategory_id' => 'Sottocategoria non valida per questo mese.']);
         }
 
@@ -95,6 +86,37 @@ class BudgetExpenseController extends Controller
         return back()->with('success', 'Spesa registrata');
     }
 
+    public function update(Request $request, BudgetExpense $budgetExpense)
+    {
+        abort_unless($budgetExpense->monthlyBudget->user_id === $request->user()->id, 403);
+
+        $validated = $request->validate([
+            'year' => 'required|integer|min:2020|max:2099',
+            'month' => 'required|integer|min:1|max:12',
+            'budget_subcategory_id' => 'required|integer|exists:budget_subcategories,id',
+            'amount' => 'required|numeric|min:0.01',
+            'description' => 'nullable|string|max:255',
+            'recorded_at' => 'required|date_format:Y-m-d H:i',
+        ]);
+
+        $user = $request->user();
+        $monthlyBudget = $this->resolver->firstOrCreateMonthlyBudget($user, $validated['year'], $validated['month']);
+
+        if (! $this->subcategoryUsableIn($user->id, (int) $validated['budget_subcategory_id'], $monthlyBudget->id)) {
+            return back()->withErrors(['budget_subcategory_id' => 'Sottocategoria non valida per questo mese.']);
+        }
+
+        $budgetExpense->update([
+            'monthly_budget_id' => $monthlyBudget->id,
+            'budget_subcategory_id' => $validated['budget_subcategory_id'],
+            'amount' => $validated['amount'],
+            'description' => $validated['description'] ?? null,
+            'recorded_at' => $validated['recorded_at'],
+        ]);
+
+        return back()->with('success', 'Movimento aggiornato');
+    }
+
     public function destroy(Request $request, BudgetExpense $budgetExpense)
     {
         abort_unless($budgetExpense->monthlyBudget->user_id === $request->user()->id, 403);
@@ -102,5 +124,17 @@ class BudgetExpenseController extends Controller
         $budgetExpense->delete();
 
         return back()->with('success', 'Spesa eliminata');
+    }
+
+    /** La sottocategoria deve essere dell'utente e valida in quel mese. */
+    private function subcategoryUsableIn(int $userId, int $subcategoryId, int $monthlyBudgetId): bool
+    {
+        return BudgetSubcategory::query()
+            ->where('id', $subcategoryId)
+            ->whereHas('category', fn ($query) => $query->where('user_id', $userId))
+            ->where(fn ($query) => $query
+                ->whereNull('monthly_budget_id')
+                ->orWhere('monthly_budget_id', $monthlyBudgetId))
+            ->exists();
     }
 }

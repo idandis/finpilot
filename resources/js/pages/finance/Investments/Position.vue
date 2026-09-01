@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Form, Head, Link, router } from '@inertiajs/vue3';
+import { Plus } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 import CompanyAnalysisController from '@/actions/App/Http/Controllers/Finance/CompanyAnalysisController';
 import InvestmentDecisionController from '@/actions/App/Http/Controllers/Finance/InvestmentDecisionController';
@@ -291,6 +292,18 @@ watch([newsYearFilter, newsMonthFilter, newsDayFilter], () => {
 });
 
 const activeTab = ref('overview');
+const isAddEventOpen = ref(false);
+const isAddReviewOpen = ref(false);
+const isAddJournalOpen = ref(false);
+
+const tabs = [
+    { value: 'overview', label: 'Overview' },
+    { value: 'thesis', label: 'Thesis' },
+    { value: 'fundamentals', label: 'Fundamentals' },
+    { value: 'events', label: 'Eventi' },
+    { value: 'reviews', label: 'Reviews' },
+    { value: 'journal', label: 'Journal' },
+];
 
 const motivationNoteEdit = ref(props.investment?.motivation_note ?? '');
 const thesisEdit = ref(props.investment?.thesis ?? '');
@@ -343,50 +356,25 @@ function deleteJournalEntryAndClose(journalEntryId: number) {
 <template>
     <Head :title="instrumentName" />
 
-    <div class="mx-auto flex w-full max-w-[72rem] flex-col space-y-8 p-4">
+    <div class="mx-auto flex w-full max-w-5xl flex-col space-y-8 p-4">
         <Heading :title="instrumentName" :description="isin" />
 
-        <Tabs
-            v-model="activeTab"
-            orientation="vertical"
-            class="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-10"
-        >
+        <Tabs v-model="activeTab" class="flex flex-col gap-6">
+            <!-- Pillole scorrevoli, come i mesi del budget mensile -->
             <TabsList
-                class="flex h-auto w-full flex-none flex-col items-stretch justify-start gap-1 rounded-none bg-transparent p-0 lg:w-48"
+                class="-mx-4 flex h-auto w-full flex-none flex-row items-center justify-start gap-2 overflow-x-auto rounded-none bg-transparent px-4 pb-1"
             >
                 <TabsTrigger
-                    value="overview"
-                    class="h-auto w-full flex-none justify-start rounded-md px-3 py-2 text-left text-sm font-medium data-[state=active]:bg-muted data-[state=active]:shadow-none"
-                    >Overview</TabsTrigger
+                    v-for="tab in tabs"
+                    :key="tab.value"
+                    :value="tab.value"
+                    class="h-auto shrink-0 whitespace-nowrap rounded-full bg-muted/50 px-4 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[state=active]:bg-primary data-[state=active]:font-medium data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
                 >
-                <TabsTrigger
-                    value="thesis"
-                    class="h-auto w-full flex-none justify-start rounded-md px-3 py-2 text-left text-sm font-medium data-[state=active]:bg-muted data-[state=active]:shadow-none"
-                    >Thesis</TabsTrigger
-                >
-                <TabsTrigger
-                    value="fundamentals"
-                    class="h-auto w-full flex-none justify-start rounded-md px-3 py-2 text-left text-sm font-medium data-[state=active]:bg-muted data-[state=active]:shadow-none"
-                    >Fundamentals</TabsTrigger
-                >
-                <TabsTrigger
-                    value="events"
-                    class="h-auto w-full flex-none justify-start rounded-md px-3 py-2 text-left text-sm font-medium data-[state=active]:bg-muted data-[state=active]:shadow-none"
-                    >Eventi</TabsTrigger
-                >
-                <TabsTrigger
-                    value="reviews"
-                    class="h-auto w-full flex-none justify-start rounded-md px-3 py-2 text-left text-sm font-medium data-[state=active]:bg-muted data-[state=active]:shadow-none"
-                    >Reviews</TabsTrigger
-                >
-                <TabsTrigger
-                    value="journal"
-                    class="h-auto w-full flex-none justify-start rounded-md px-3 py-2 text-left text-sm font-medium data-[state=active]:bg-muted data-[state=active]:shadow-none"
-                    >Journal</TabsTrigger
-                >
+                    {{ tab.label }}
+                </TabsTrigger>
             </TabsList>
 
-            <div class="min-w-0 flex-1 space-y-8">
+            <div class="min-w-0 space-y-8">
                 <TabsContent value="overview" class="space-y-8">
                     <div
                         v-if="!investment"
@@ -447,7 +435,7 @@ function deleteJournalEntryAndClose(journalEntryId: number) {
                             <TabsTrigger value="news">News</TabsTrigger>
                         </TabsList>
 
-                        <TabsContent value="note" class="max-w-lg pt-4">
+                        <TabsContent value="note" class="pt-4">
                             <Form
                                 v-bind="InvestmentNoteController.store.form(isin)"
                                 reset-on-success
@@ -688,7 +676,7 @@ function deleteJournalEntryAndClose(journalEntryId: number) {
                     </Tabs>
                 </TabsContent>
 
-                <TabsContent value="thesis" class="max-w-xl space-y-4">
+                <TabsContent value="thesis" class="space-y-4">
                     <template v-if="!investment">
                         <p class="text-sm text-muted-foreground">
                             Prima di continuare a seguire questo investimento, compila la scheda decisionale: solo
@@ -699,56 +687,65 @@ function deleteJournalEntryAndClose(journalEntryId: number) {
                             v-slot="{ errors, processing }"
                             class="space-y-4"
                         >
-                            <div>
-                                <Label>Motivazione dell'acquisto</Label>
-                                <div class="mt-2 grid grid-cols-2 gap-2">
+                            <section class="space-y-3 rounded-2xl bg-muted/60 p-4 dark:bg-muted/50">
+                                <h3 class="font-semibold">Motivazione dell'acquisto</h3>
+                                <div class="grid gap-2 sm:grid-cols-2">
                                     <label
                                         v-for="option in motivationOptions"
                                         :key="option.key"
-                                        class="flex items-center gap-2 text-sm"
+                                        class="flex items-start gap-2 rounded-lg bg-background/50 px-3 py-2 text-sm"
                                     >
-                                        <input type="checkbox" name="motivation_reasons[]" :value="option.key" class="h-4 w-4 rounded border-input" />
-                                        {{ option.label }}
+                                        <input type="checkbox" name="motivation_reasons[]" :value="option.key" class="mt-0.5 size-4 shrink-0 rounded border-input" />
+                                        <span>{{ option.label }}</span>
                                     </label>
                                 </div>
-                            </div>
-                            <div>
-                                <Label for="motivation_note">Nota sulla motivazione (opzionale)</Label>
-                                <textarea id="motivation_note" name="motivation_note" rows="2" :class="textareaClass" class="mt-2" />
-                            </div>
-                            <div>
-                                <Label for="thesis">Tesi di investimento</Label>
-                                <textarea id="thesis" name="thesis" required rows="4" :class="textareaClass" class="mt-2" />
-                                <InputError :message="errors.thesis" />
-                            </div>
-                            <div>
-                                <Label for="sell_conditions">Condizioni che ti farebbero cambiare idea</Label>
-                                <textarea id="sell_conditions" name="sell_conditions" rows="3" :class="textareaClass" class="mt-2" />
-                            </div>
-                            <div class="grid grid-cols-2 gap-4">
                                 <div>
-                                    <Label for="time_horizon">Orizzonte temporale</Label>
-                                    <select id="time_horizon" name="time_horizon" required :class="selectClass" class="mt-2">
-                                        <option value="" disabled selected>Seleziona…</option>
-                                        <option
-                                            v-for="(label, key) in TIME_HORIZON_LABELS"
-                                            :key="key"
-                                            :value="key"
-                                        >
-                                            {{ label }}
-                                        </option>
-                                    </select>
-                                    <InputError :message="errors.time_horizon" />
+                                    <Label for="motivation_note">Nota sulla motivazione (opzionale)</Label>
+                                    <textarea id="motivation_note" name="motivation_note" rows="2" :class="textareaClass" class="mt-2" />
+                                </div>
+                            </section>
+
+                            <section class="space-y-3 rounded-2xl bg-muted/60 p-4 dark:bg-muted/50">
+                                <h3 class="font-semibold">Tesi e condizioni di uscita</h3>
+                                <div>
+                                    <Label for="thesis">Tesi di investimento</Label>
+                                    <textarea id="thesis" name="thesis" required rows="4" :class="textareaClass" class="mt-2" />
+                                    <InputError :message="errors.thesis" />
                                 </div>
                                 <div>
-                                    <Label for="initial_confidence">Convinzione iniziale (1-10)</Label>
-                                    <select id="initial_confidence" name="initial_confidence" required :class="selectClass" class="mt-2">
-                                        <option value="" disabled selected>Seleziona…</option>
-                                        <option v-for="n in 10" :key="n" :value="n">{{ n }}</option>
-                                    </select>
-                                    <InputError :message="errors.initial_confidence" />
+                                    <Label for="sell_conditions">Condizioni che ti farebbero cambiare idea</Label>
+                                    <textarea id="sell_conditions" name="sell_conditions" rows="3" :class="textareaClass" class="mt-2" />
                                 </div>
-                            </div>
+                            </section>
+
+                            <section class="space-y-3 rounded-2xl bg-muted/60 p-4 dark:bg-muted/50">
+                                <h3 class="font-semibold">Orizzonte e convinzione</h3>
+                                <div class="grid gap-4 sm:grid-cols-2">
+                                    <div>
+                                        <Label for="time_horizon">Orizzonte temporale</Label>
+                                        <select id="time_horizon" name="time_horizon" required :class="selectClass" class="mt-2">
+                                            <option value="" disabled selected>Seleziona…</option>
+                                            <option
+                                                v-for="(label, key) in TIME_HORIZON_LABELS"
+                                                :key="key"
+                                                :value="key"
+                                            >
+                                                {{ label }}
+                                            </option>
+                                        </select>
+                                        <InputError :message="errors.time_horizon" />
+                                    </div>
+                                    <div>
+                                        <Label for="initial_confidence">Convinzione iniziale (1-10)</Label>
+                                        <select id="initial_confidence" name="initial_confidence" required :class="selectClass" class="mt-2">
+                                            <option value="" disabled selected>Seleziona…</option>
+                                            <option v-for="n in 10" :key="n" :value="n">{{ n }}</option>
+                                        </select>
+                                        <InputError :message="errors.initial_confidence" />
+                                    </div>
+                                </div>
+                            </section>
+
                             <Button type="submit" :disabled="processing">Salva scheda decisionale</Button>
                         </Form>
                     </template>
@@ -760,92 +757,101 @@ function deleteJournalEntryAndClose(journalEntryId: number) {
                             v-slot="{ errors, processing }"
                             class="space-y-4"
                         >
-                            <div>
-                                <Label>Motivazione dell'acquisto</Label>
-                                <div class="mt-2 grid grid-cols-2 gap-2">
+                            <section class="space-y-3 rounded-2xl bg-muted/60 p-4 dark:bg-muted/50">
+                                <h3 class="font-semibold">Motivazione dell'acquisto</h3>
+                                <div class="grid gap-2 sm:grid-cols-2">
                                     <label
                                         v-for="option in motivationOptions"
                                         :key="option.key"
-                                        class="flex items-center gap-2 text-sm"
+                                        class="flex items-start gap-2 rounded-lg bg-background/50 px-3 py-2 text-sm"
                                     >
                                         <input
                                             type="checkbox"
                                             name="motivation_reasons[]"
                                             :value="option.key"
                                             :checked="investment.motivation_reasons.includes(option.key)"
-                                            class="h-4 w-4 rounded border-input"
+                                            class="mt-0.5 size-4 shrink-0 rounded border-input"
                                         />
-                                        {{ option.label }}
+                                        <span>{{ option.label }}</span>
                                     </label>
                                 </div>
-                            </div>
-                            <div>
-                                <Label for="motivation_note_edit">Nota sulla motivazione (opzionale)</Label>
-                                <textarea
-                                    id="motivation_note_edit"
-                                    v-model="motivationNoteEdit"
-                                    name="motivation_note"
-                                    rows="2"
-                                    :class="textareaClass"
-                                    class="mt-2"
-                                />
-                            </div>
-                            <div>
-                                <Label for="thesis_edit">Tesi di investimento</Label>
-                                <textarea
-                                    id="thesis_edit"
-                                    v-model="thesisEdit"
-                                    name="thesis"
-                                    required
-                                    rows="4"
-                                    :class="textareaClass"
-                                    class="mt-2"
-                                />
-                                <InputError :message="errors.thesis" />
-                            </div>
-                            <div>
-                                <Label for="sell_conditions_edit">Condizioni che ti farebbero cambiare idea</Label>
-                                <textarea
-                                    id="sell_conditions_edit"
-                                    v-model="sellConditionsEdit"
-                                    name="sell_conditions"
-                                    rows="3"
-                                    :class="textareaClass"
-                                    class="mt-2"
-                                />
-                            </div>
-                            <div class="grid grid-cols-2 gap-4">
                                 <div>
-                                    <Label for="time_horizon_edit">Orizzonte temporale</Label>
-                                    <select id="time_horizon_edit" name="time_horizon" required :class="selectClass" class="mt-2">
-                                        <option
-                                            v-for="(label, key) in TIME_HORIZON_LABELS"
-                                            :key="key"
-                                            :value="key"
-                                            :selected="investment.time_horizon === key"
-                                        >
-                                            {{ label }}
-                                        </option>
-                                    </select>
+                                    <Label for="motivation_note_edit">Nota sulla motivazione (opzionale)</Label>
+                                    <textarea
+                                        id="motivation_note_edit"
+                                        v-model="motivationNoteEdit"
+                                        name="motivation_note"
+                                        rows="2"
+                                        :class="textareaClass"
+                                        class="mt-2"
+                                    />
+                                </div>
+                            </section>
+
+                            <section class="space-y-3 rounded-2xl bg-muted/60 p-4 dark:bg-muted/50">
+                                <h3 class="font-semibold">Tesi e condizioni di uscita</h3>
+                                <div>
+                                    <Label for="thesis_edit">Tesi di investimento</Label>
+                                    <textarea
+                                        id="thesis_edit"
+                                        v-model="thesisEdit"
+                                        name="thesis"
+                                        required
+                                        rows="4"
+                                        :class="textareaClass"
+                                        class="mt-2"
+                                    />
+                                    <InputError :message="errors.thesis" />
                                 </div>
                                 <div>
-                                    <Label for="current_confidence_edit">Convinzione attuale (1-10)</Label>
-                                    <select id="current_confidence_edit" name="current_confidence" required :class="selectClass" class="mt-2">
-                                        <option
-                                            v-for="n in 10"
-                                            :key="n"
-                                            :value="n"
-                                            :selected="investment.current_confidence === n"
-                                        >
-                                            {{ n }}
-                                        </option>
-                                    </select>
+                                    <Label for="sell_conditions_edit">Condizioni che ti farebbero cambiare idea</Label>
+                                    <textarea
+                                        id="sell_conditions_edit"
+                                        v-model="sellConditionsEdit"
+                                        name="sell_conditions"
+                                        rows="3"
+                                        :class="textareaClass"
+                                        class="mt-2"
+                                    />
                                 </div>
-                            </div>
-                            <p class="text-xs text-muted-foreground">
-                                Convinzione iniziale: {{ investment.initial_confidence }}/10 · Creata il
-                                {{ formatDate(investment.created_at) }}
-                            </p>
+                            </section>
+
+                            <section class="space-y-3 rounded-2xl bg-muted/60 p-4 dark:bg-muted/50">
+                                <h3 class="font-semibold">Orizzonte e convinzione</h3>
+                                <div class="grid gap-4 sm:grid-cols-2">
+                                    <div>
+                                        <Label for="time_horizon_edit">Orizzonte temporale</Label>
+                                        <select id="time_horizon_edit" name="time_horizon" required :class="selectClass" class="mt-2">
+                                            <option
+                                                v-for="(label, key) in TIME_HORIZON_LABELS"
+                                                :key="key"
+                                                :value="key"
+                                                :selected="investment.time_horizon === key"
+                                            >
+                                                {{ label }}
+                                            </option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <Label for="current_confidence_edit">Convinzione attuale (1-10)</Label>
+                                        <select id="current_confidence_edit" name="current_confidence" required :class="selectClass" class="mt-2">
+                                            <option
+                                                v-for="n in 10"
+                                                :key="n"
+                                                :value="n"
+                                                :selected="investment.current_confidence === n"
+                                            >
+                                                {{ n }}
+                                            </option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-muted-foreground">
+                                    Convinzione iniziale: {{ investment.initial_confidence }}/10 · Creata il
+                                    {{ formatDate(investment.created_at) }}
+                                </p>
+                            </section>
+
                             <Button type="submit" :disabled="processing">Salva modifiche</Button>
                         </Form>
                     </template>
@@ -859,31 +865,33 @@ function deleteJournalEntryAndClose(journalEntryId: number) {
                         Completa prima la scheda nella tab "Thesis" per iniziare a tracciare i fondamentali.
                     </div>
 
-                    <div v-else-if="!fundamentals" class="max-w-md space-y-6">
+                    <div v-else-if="!fundamentals" class="space-y-4">
                         <p class="text-sm text-muted-foreground">
                             Collega questo investimento a un'analisi aziendale per vedere qui ricavi, margini,
                             ROE/ROIC, debito, fair value e valutazione, aggiornabili automaticamente da FMP.
                         </p>
 
-                        <Form
-                            v-if="companyAnalyses.length > 0"
-                            v-bind="InvestmentDecisionController.linkAnalysis.form(investment.id)"
-                            v-slot="{ processing }"
-                            class="flex items-end gap-2"
-                        >
-                            <div class="flex-1">
-                                <Label for="company_analysis_id">Analisi esistente</Label>
-                                <select id="company_analysis_id" name="company_analysis_id" :class="selectClass" class="mt-2">
-                                    <option v-for="analysis in companyAnalyses" :key="analysis.id" :value="analysis.id">
-                                        {{ analysis.name }} ({{ analysis.symbol }})
-                                    </option>
-                                </select>
-                            </div>
-                            <Button type="submit" variant="outline" :disabled="processing">Collega</Button>
-                        </Form>
+                        <div v-if="companyAnalyses.length > 0" class="space-y-3 rounded-2xl bg-muted/60 p-4 dark:bg-muted/50">
+                            <h3 class="font-semibold">Collega un'analisi esistente</h3>
+                            <Form
+                                v-bind="InvestmentDecisionController.linkAnalysis.form(investment.id)"
+                                v-slot="{ processing }"
+                                class="flex flex-wrap items-end gap-2"
+                            >
+                                <div class="min-w-48 flex-1">
+                                    <Label for="company_analysis_id">Analisi</Label>
+                                    <select id="company_analysis_id" name="company_analysis_id" :class="selectClass" class="mt-2">
+                                        <option v-for="analysis in companyAnalyses" :key="analysis.id" :value="analysis.id">
+                                            {{ analysis.name }} ({{ analysis.symbol }})
+                                        </option>
+                                    </select>
+                                </div>
+                                <Button type="submit" variant="outline" :disabled="processing">Collega</Button>
+                            </Form>
+                        </div>
 
-                        <div class="space-y-2 border-t pt-4">
-                            <p class="text-xs text-muted-foreground">Oppure crea una nuova analisi</p>
+                        <div class="space-y-3 rounded-2xl bg-muted/60 p-4 dark:bg-muted/50">
+                            <h3 class="font-semibold">Crea una nuova analisi</h3>
                             <Form
                                 v-bind="InvestmentDecisionController.linkAnalysis.form(investment.id)"
                                 v-slot="{ errors, processing }"
@@ -899,7 +907,7 @@ function deleteJournalEntryAndClose(journalEntryId: number) {
                     </div>
 
                     <div v-else class="space-y-6">
-                        <div class="flex flex-wrap items-center justify-between gap-4">
+                        <div class="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-muted/60 p-4 dark:bg-muted/50">
                             <p class="text-sm text-muted-foreground">
                                 {{
                                     fundamentals.indicators_fetched_at
@@ -925,28 +933,28 @@ function deleteJournalEntryAndClose(journalEntryId: number) {
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                            <div v-for="field in FUNDAMENTALS_SUMMARY_FIELDS" :key="field.key" class="grid gap-1">
+                        <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                            <div v-for="field in FUNDAMENTALS_SUMMARY_FIELDS" :key="field.key" class="rounded-xl bg-muted/60 p-3 dark:bg-muted/50">
                                 <p class="text-xs text-muted-foreground">{{ field.label }}</p>
-                                <p class="font-medium">
+                                <p class="mt-1 text-lg font-semibold tabular-nums">
                                     {{ formatIndicator(fundamentals[field.key] as number | null, field.suffix) }}
                                 </p>
                             </div>
-                            <div class="grid gap-1">
+                            <div class="rounded-xl bg-muted/60 p-3 dark:bg-muted/50">
                                 <p class="text-xs text-muted-foreground">Prezzo attuale</p>
-                                <p class="font-medium">
+                                <p class="mt-1 text-lg font-semibold tabular-nums">
                                     {{ fundamentals.current_price !== null ? formatCurrency(fundamentals.current_price) : '—' }}
                                 </p>
                             </div>
-                            <div class="grid gap-1">
+                            <div class="rounded-xl bg-muted/60 p-3 dark:bg-muted/50">
                                 <p class="text-xs text-muted-foreground">Fair value</p>
-                                <p class="font-medium">
+                                <p class="mt-1 text-lg font-semibold tabular-nums">
                                     {{ fundamentals.fair_value !== null ? formatCurrency(fundamentals.fair_value) : '—' }}
                                 </p>
                             </div>
                         </div>
 
-                        <div v-if="fundamentals.valuation.verdict" class="rounded-lg bg-muted dark:bg-muted/40 p-4">
+                        <div v-if="fundamentals.valuation.verdict" class="rounded-2xl bg-muted/60 p-4 dark:bg-muted/50">
                             <p class="text-sm font-medium" :class="VERDICT_META[fundamentals.valuation.verdict].class">
                                 {{ VERDICT_META[fundamentals.valuation.verdict].emoji }}
                                 {{ VERDICT_META[fundamentals.valuation.verdict].label }}
@@ -956,7 +964,7 @@ function deleteJournalEntryAndClose(journalEntryId: number) {
                             </p>
                             <p class="mt-1 text-sm text-muted-foreground">{{ fundamentals.valuation.recommended_action }}</p>
                         </div>
-                        <p v-else class="text-sm text-muted-foreground">
+                        <p v-else class="rounded-2xl bg-muted/60 p-4 dark:bg-muted/50 text-sm text-muted-foreground">
                             Imposta un fair value nell'analisi collegata per vedere qui il verdetto di valutazione.
                         </p>
                     </div>
@@ -970,63 +978,18 @@ function deleteJournalEntryAndClose(journalEntryId: number) {
                         Completa prima la scheda nella tab "Thesis" per registrare gli eventi.
                     </div>
 
-                    <div v-else class="max-w-2xl space-y-4">
-                        <p class="text-sm text-muted-foreground">
-                            Fatti oggettivi pubblicati dall'azienda (trimestrali, guidance, Investor Day,
-                            acquisizioni, cambio management...). Registra qui i dati, senza indicare una decisione:
-                            quella va nel tab "Reviews".
-                        </p>
-
-                        <Form
-                            v-bind="InvestmentEventController.store.form(investment.id)"
-                            reset-on-success
-                            v-slot="{ errors, processing }"
-                            class="space-y-3 rounded-lg bg-muted dark:bg-muted/40 p-4"
-                        >
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <Label for="event_type">Tipo di evento</Label>
-                                    <select id="event_type" name="event_type" required :class="selectClass" class="mt-2">
-                                        <option v-for="(label, key) in EVENT_TYPE_LABELS" :key="key" :value="key">
-                                            {{ label }}
-                                        </option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <Label for="event_date">Data</Label>
-                                    <Input id="event_date" type="date" name="event_date" required class="mt-2" />
-                                    <InputError :message="errors.event_date" />
-                                </div>
-                            </div>
-                            <div>
-                                <Label for="title">Titolo</Label>
-                                <Input
-                                    id="title"
-                                    name="title"
-                                    required
-                                    placeholder="Es. Q1 FY2027 — Risultati trimestrali"
-                                    class="mt-2"
-                                />
-                                <InputError :message="errors.title" />
-                            </div>
-                            <div>
-                                <Label for="metrics_raw">Metriche (una per riga, formato "Etichetta: valore")</Label>
-                                <textarea
-                                    id="metrics_raw"
-                                    name="metrics_raw"
-                                    rows="4"
-                                    placeholder="Ricavi: $65.6B (+18% YoY)&#10;EPS: $3.30 vs $3.10 atteso&#10;Crescita Azure: +33%&#10;Guidance Q2: $68-69B"
-                                    :class="textareaClass"
-                                    class="mt-2"
-                                />
-                                <InputError :message="errors.metrics_raw" />
-                            </div>
-                            <div>
-                                <Label for="summary">Sintesi</Label>
-                                <textarea id="summary" name="summary" rows="2" :class="textareaClass" class="mt-2" />
-                            </div>
-                            <Button type="submit" size="sm" :disabled="processing">Aggiungi evento</Button>
-                        </Form>
+                    <div v-else class="space-y-4">
+                        <div class="flex items-start justify-between gap-4">
+                            <p class="text-sm text-muted-foreground">
+                                Fatti oggettivi pubblicati dall'azienda (trimestrali, guidance, Investor Day,
+                                acquisizioni, cambio management...). Registra qui i dati, senza indicare una
+                                decisione: quella va nel tab "Reviews".
+                            </p>
+                            <Button size="sm" class="shrink-0" @click="isAddEventOpen = true">
+                                <Plus class="mr-1 size-4" />
+                                Evento
+                            </Button>
+                        </div>
 
                         <div v-if="investment.events.length === 0" class="text-sm text-muted-foreground">
                             Nessun evento registrato.
@@ -1072,7 +1035,7 @@ function deleteJournalEntryAndClose(journalEntryId: number) {
                         Completa prima la scheda nella tab "Thesis" per registrare le review.
                     </div>
 
-                    <div v-else class="max-w-2xl space-y-10">
+                    <div v-else class="space-y-10">
                         <div class="rounded-lg bg-muted dark:bg-muted/40 p-4">
                             <h4 class="mb-3 text-sm font-medium">Prossima review</h4>
                             <Form
@@ -1110,66 +1073,19 @@ function deleteJournalEntryAndClose(journalEntryId: number) {
                         </div>
 
                         <div class="space-y-4">
-                            <div>
-                                <h3 class="text-sm font-medium">Review personali</h3>
-                                <p class="mt-1 text-xs text-muted-foreground">
-                                    Le tue decisioni: cosa hai deciso, come è cambiata la convinzione e se la tesi è
-                                    ancora valida. Puoi collegare una review all'evento che l'ha generata.
-                                </p>
-                            </div>
-
-                            <Form
-                                v-bind="InvestmentReviewController.store.form(investment.id)"
-                                reset-on-success
-                                v-slot="{ errors, processing }"
-                                class="space-y-3 rounded-lg bg-muted dark:bg-muted/40 p-4"
-                            >
-                                <div v-if="investment.events.length > 0">
-                                    <Label for="investment_event_id">Evento collegato (opzionale)</Label>
-                                    <select id="investment_event_id" name="investment_event_id" :class="selectClass" class="mt-2">
-                                        <option value="">Nessuno</option>
-                                        <option v-for="event in investment.events" :key="event.id" :value="event.id">
-                                            {{ event.title }} — {{ formatDate(event.event_date) }}
-                                        </option>
-                                    </select>
-                                </div>
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <Label for="review_date">Data</Label>
-                                        <Input id="review_date" type="date" name="review_date" required class="mt-2" />
-                                        <InputError :message="errors.review_date" />
-                                    </div>
-                                    <div>
-                                        <Label for="decision">Decisione</Label>
-                                        <select id="decision" name="decision" required :class="selectClass" class="mt-2">
-                                            <option v-for="(label, key) in DECISION_LABELS" :key="key" :value="key">
-                                                {{ label }}
-                                            </option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <Label for="score_after">Nuovo punteggio di convinzione (1-10)</Label>
-                                        <select id="score_after" name="score_after" required :class="selectClass" class="mt-2">
-                                            <option v-for="n in 10" :key="n" :value="n">{{ n }}</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <Label for="thesis_still_valid">La tesi è ancora valida?</Label>
-                                        <select id="thesis_still_valid" name="thesis_still_valid" :class="selectClass" class="mt-2">
-                                            <option value="">Non specificato</option>
-                                            <option value="1">Sì</option>
-                                            <option value="0">No</option>
-                                        </select>
-                                    </div>
-                                </div>
+                            <div class="flex items-start justify-between gap-4">
                                 <div>
-                                    <Label for="review_note">Motivazione</Label>
-                                    <textarea id="review_note" name="note" rows="2" :class="textareaClass" class="mt-2" />
+                                    <h3 class="text-sm font-medium">Review personali</h3>
+                                    <p class="mt-1 text-xs text-muted-foreground">
+                                        Le tue decisioni: cosa hai deciso, come è cambiata la convinzione e se la
+                                        tesi è ancora valida. Puoi collegare una review all'evento che l'ha generata.
+                                    </p>
                                 </div>
-                                <Button type="submit" size="sm" :disabled="processing">Aggiungi review</Button>
-                            </Form>
+                                <Button size="sm" class="shrink-0" @click="isAddReviewOpen = true">
+                                    <Plus class="mr-1 size-4" />
+                                    Review
+                                </Button>
+                            </div>
 
                             <div v-if="investment.reviews.length === 0" class="text-sm text-muted-foreground">
                                 Nessuna review registrata.
@@ -1216,36 +1132,14 @@ function deleteJournalEntryAndClose(journalEntryId: number) {
                         Completa prima la scheda nella tab "Thesis" per iniziare il journal.
                     </div>
 
-                    <div v-else class="max-w-2xl space-y-6">
-                        <Form
-                            v-bind="InvestmentJournalEntryController.store.form(investment.id)"
-                            reset-on-success
-                            v-slot="{ errors, processing }"
-                            class="space-y-3 rounded-lg bg-muted dark:bg-muted/40 p-4"
-                        >
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <Label for="occurred_at">Data</Label>
-                                    <Input id="occurred_at" type="date" name="occurred_at" required class="mt-2" />
-                                    <InputError :message="errors.occurred_at" />
-                                </div>
-                                <div>
-                                    <Label for="transaction_id">Collega a una transazione (opzionale)</Label>
-                                    <select id="transaction_id" name="transaction_id" :class="selectClass" class="mt-2">
-                                        <option value="">Nessuna</option>
-                                        <option v-for="transaction in transactions" :key="transaction.id" :value="transaction.id">
-                                            {{ formatDate(transaction.transaction_date) }} — {{ transaction.description }}
-                                        </option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div>
-                                <Label for="journal_note">Nota</Label>
-                                <textarea id="journal_note" name="note" required rows="2" :class="textareaClass" class="mt-2" />
-                                <InputError :message="errors.note" />
-                            </div>
-                            <Button type="submit" size="sm" :disabled="processing">Aggiungi al journal</Button>
-                        </Form>
+                    <div v-else class="space-y-6">
+                        <div class="flex items-center justify-between gap-4">
+                            <h3 class="text-sm font-medium">Journal</h3>
+                            <Button size="sm" class="shrink-0" @click="isAddJournalOpen = true">
+                                <Plus class="mr-1 size-4" />
+                                Nota
+                            </Button>
+                        </div>
 
                         <div v-if="journal.length === 0" class="text-sm text-muted-foreground">
                             Nessun evento nel journal.
@@ -1293,6 +1187,173 @@ function deleteJournalEntryAndClose(journalEntryId: number) {
                 </TabsContent>
             </div>
         </Tabs>
+
+        <!-- Nuova review -->
+        <Sheet v-if="investment" v-model:open="isAddReviewOpen">
+            <SheetContent class="w-full overflow-y-auto sm:max-w-lg">
+                <SheetHeader>
+                    <SheetTitle>Nuova review</SheetTitle>
+                    <SheetDescription>{{ instrumentName }}</SheetDescription>
+                </SheetHeader>
+
+                <Form
+                    v-bind="InvestmentReviewController.store.form(investment.id)"
+                    reset-on-success
+                    v-slot="{ errors, processing }"
+                    class="space-y-3 px-4 pb-6"
+                    @success="isAddReviewOpen = false"
+                >
+                    <div v-if="investment.events.length > 0">
+                        <Label for="investment_event_id">Evento collegato (opzionale)</Label>
+                        <select id="investment_event_id" name="investment_event_id" :class="selectClass" class="mt-2">
+                            <option value="">Nessuno</option>
+                            <option v-for="event in investment.events" :key="event.id" :value="event.id">
+                                {{ event.title }} — {{ formatDate(event.event_date) }}
+                            </option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <Label for="review_date">Data</Label>
+                            <Input id="review_date" type="date" name="review_date" required class="mt-2" />
+                            <InputError :message="errors.review_date" />
+                        </div>
+                        <div>
+                            <Label for="decision">Decisione</Label>
+                            <select id="decision" name="decision" required :class="selectClass" class="mt-2">
+                                <option v-for="(label, key) in DECISION_LABELS" :key="key" :value="key">
+                                    {{ label }}
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <Label for="score_after">Nuovo punteggio di convinzione (1-10)</Label>
+                            <select id="score_after" name="score_after" required :class="selectClass" class="mt-2">
+                                <option v-for="n in 10" :key="n" :value="n">{{ n }}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <Label for="thesis_still_valid">La tesi è ancora valida?</Label>
+                            <select id="thesis_still_valid" name="thesis_still_valid" :class="selectClass" class="mt-2">
+                                <option value="">Non specificato</option>
+                                <option value="1">Sì</option>
+                                <option value="0">No</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <Label for="review_note">Motivazione</Label>
+                        <textarea id="review_note" name="note" rows="2" :class="textareaClass" class="mt-2" />
+                    </div>
+                    <Button type="submit" class="w-full" :disabled="processing">Aggiungi review</Button>
+                </Form>
+            </SheetContent>
+        </Sheet>
+
+        <!-- Nuova voce di journal -->
+        <Sheet v-if="investment" v-model:open="isAddJournalOpen">
+            <SheetContent class="w-full overflow-y-auto sm:max-w-lg">
+                <SheetHeader>
+                    <SheetTitle>Nuova nota nel journal</SheetTitle>
+                    <SheetDescription>{{ instrumentName }}</SheetDescription>
+                </SheetHeader>
+
+                <Form
+                    v-bind="InvestmentJournalEntryController.store.form(investment.id)"
+                    reset-on-success
+                    v-slot="{ errors, processing }"
+                    class="space-y-3 px-4 pb-6"
+                    @success="isAddJournalOpen = false"
+                >
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <Label for="occurred_at">Data</Label>
+                            <Input id="occurred_at" type="date" name="occurred_at" required class="mt-2" />
+                            <InputError :message="errors.occurred_at" />
+                        </div>
+                        <div>
+                            <Label for="transaction_id">Collega a una transazione (opzionale)</Label>
+                            <select id="transaction_id" name="transaction_id" :class="selectClass" class="mt-2">
+                                <option value="">Nessuna</option>
+                                <option v-for="transaction in transactions" :key="transaction.id" :value="transaction.id">
+                                    {{ formatDate(transaction.transaction_date) }} — {{ transaction.description }}
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <Label for="journal_note">Nota</Label>
+                        <textarea id="journal_note" name="note" required rows="2" :class="textareaClass" class="mt-2" />
+                        <InputError :message="errors.note" />
+                    </div>
+                    <Button type="submit" class="w-full" :disabled="processing">Aggiungi al journal</Button>
+                </Form>
+            </SheetContent>
+        </Sheet>
+
+        <!-- Nuovo evento: il form vive in un pannello, la pagina resta l'elenco -->
+        <Sheet v-if="investment" v-model:open="isAddEventOpen">
+            <SheetContent class="w-full overflow-y-auto sm:max-w-lg">
+                <SheetHeader>
+                    <SheetTitle>Nuovo evento</SheetTitle>
+                    <SheetDescription>{{ instrumentName }}</SheetDescription>
+                </SheetHeader>
+
+                <Form
+                    v-bind="InvestmentEventController.store.form(investment.id)"
+                    reset-on-success
+                    v-slot="{ errors, processing }"
+                    class="space-y-3 px-4 pb-6"
+                    @success="isAddEventOpen = false"
+                >
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <Label for="event_type">Tipo di evento</Label>
+                            <select id="event_type" name="event_type" required :class="selectClass" class="mt-2">
+                                <option v-for="(label, key) in EVENT_TYPE_LABELS" :key="key" :value="key">
+                                    {{ label }}
+                                </option>
+                            </select>
+                        </div>
+                        <div>
+                            <Label for="event_date">Data</Label>
+                            <Input id="event_date" type="date" name="event_date" required class="mt-2" />
+                            <InputError :message="errors.event_date" />
+                        </div>
+                    </div>
+                    <div>
+                        <Label for="title">Titolo</Label>
+                        <Input
+                            id="title"
+                            name="title"
+                            required
+                            placeholder="Es. Q1 FY2027 — Risultati trimestrali"
+                            class="mt-2"
+                        />
+                        <InputError :message="errors.title" />
+                    </div>
+                    <div>
+                        <Label for="metrics_raw">Metriche (una per riga, formato "Etichetta: valore")</Label>
+                        <textarea
+                            id="metrics_raw"
+                            name="metrics_raw"
+                            rows="4"
+                            placeholder="Ricavi: $65.6B (+18% YoY)&#10;EPS: $3.30 vs $3.10 atteso&#10;Crescita Azure: +33%&#10;Guidance Q2: $68-69B"
+                            :class="textareaClass"
+                            class="mt-2"
+                        />
+                        <InputError :message="errors.metrics_raw" />
+                    </div>
+                    <div>
+                        <Label for="summary">Sintesi</Label>
+                        <textarea id="summary" name="summary" rows="2" :class="textareaClass" class="mt-2" />
+                    </div>
+                    <Button type="submit" class="w-full" :disabled="processing">Aggiungi evento</Button>
+                </Form>
+            </SheetContent>
+        </Sheet>
 
         <Sheet :open="activeDetail !== null" @update:open="(open) => { if (!open) closeDetail(); }">
             <SheetContent class="w-full gap-0 overflow-y-auto sm:max-w-lg">

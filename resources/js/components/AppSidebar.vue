@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
+import { Link, router } from '@inertiajs/vue3';
 import { LayoutGrid, Sparkles } from '@lucide/vue';
-import { computed } from 'vue';
+import { computed, onMounted, onUnmounted } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
@@ -15,12 +15,23 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
     SidebarSeparator,
+    useSidebar,
 } from '@/components/ui/sidebar';
 import { useSidebarModules } from '@/composables/useSidebarModules';
 import { mainNavItems as configurableNavItems } from '@/lib/sidebar-nav';
 import { dashboard } from '@/routes';
 import * as aiChat from '@/routes/ai-chat';
 import type { NavItem } from '@/types';
+
+// Su mobile la sidebar è un pannello sopra la pagina: dopo aver seguito un
+// link resterebbe aperta davanti alla pagina appena caricata.
+const { setOpenMobile } = useSidebar();
+
+onMounted(() => {
+    const stopListening = router.on('navigate', () => setOpenMobile(false));
+
+    onUnmounted(stopListening);
+});
 
 const aiNavItems: NavItem[] = [
     {
