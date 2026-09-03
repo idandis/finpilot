@@ -3,15 +3,21 @@
 namespace App\Http\Controllers\Budget;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Budget\BudgetMemberStoreRequest;
 use App\Models\BudgetCategory;
 use App\Models\BudgetExpense;
 use App\Models\BudgetSubcategory;
 use App\Models\MonthlyBudget;
 use App\Models\MonthlyBudgetLine;
+use App\Models\User;
+use App\Services\Budget\BudgetOwner;
 use App\Services\Budget\BudgetStructureResolver;
+use App\Services\Sharing\SharedResource;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 
 class MonthlyBudgetController extends Controller
@@ -25,8 +31,9 @@ class MonthlyBudgetController extends Controller
         $month = (int) $request->integer('month', $now->month);
 
         $user = $request->user();
-        $monthlyBudget = $this->resolver->findMonthlyBudget($user, $year, $month);
-        $categories = $this->resolver->categoriesFor($user, $monthlyBudget);
+        $owner = BudgetOwner::resolve($user, $request->query('budget'));
+        $monthlyBudget = $this->resolver->findMonthlyBudget($owner, $year, $month);
+        $categories = $this->resolver->categoriesFor($owner, $monthlyBudget);
 
         $budgetLines = $monthlyBudget
             ? $monthlyBudget->budgetLines()
@@ -81,7 +88,74 @@ class MonthlyBudgetController extends Controller
             'expenses' => $expenses,
             'transactions' => $transactions,
             'monthlyBudget' => $monthlyBudget?->id,
+            'budgets' => $this->accessibleBudgets($user),
+            'budget' => $this->serializeBudget($owner, $user),
         ]);
+    }
+
+    /**
+     * Il selettore: prima il proprio budget, poi quelli condivisi, ognuno
+     * identificato dal suo proprietario.
+     *
+     * @return Collection<int, array{id: int, name: string, is_shared: bool}>
+     */
+    private function accessibleBudgets(User $user)
+    {
+        return collect([['id' => $user->id, 'name' => 'Il mio budget', 'is_shared' => false]])
+            ->concat($user->sharedBudgets()->orderBy('name')->get()
+                ->map(fn (User $owner) => ['id' => $owner->id, 'name' => $owner->name, 'is_shared' => true]));
+    }
+
+    /**
+     * Il budget mostrato con tutte le persone che ci lavorano: la lista
+     * dietro il pannello di condivisione.
+     *
+     * @return array<string, mixed>
+     */
+    private function serializeBudget(User $owner, User $user): array
+    {
+        $owner->load('budgetMembers:id,name,email');
+
+        return [
+            'id' => $owner->id,
+            'name' => $owner->id === $user->id ? 'Il mio budget' : $owner->name,
+            'is_owner' => $owner->id === $user->id,
+            'people' => $owner->budgetPeople()->map(fn (User $person) => [
+                'id' => $person->id,
+                'name' => $person->name,
+                'email' => $person->email,
+                'is_owner' => $person->id === $owner->id,
+            ])->all(),
+        ];
+    }
+
+    public function storeMember(BudgetMemberStoreRequest $request): RedirectResponse
+    {
+        $member = User::query()->where('email', $request->validated('email'))->sole();
+
+        $request->user()->budgetMembers()->syncWithoutDetaching([$member->id]);
+        $request->user()->load('budgetMembers');
+
+        SharedResource::forBudget($request->user())->invite($member, $request->user());
+
+        return back();
+    }
+
+    /**
+     * Toglie qualcuno da un budget: il proprietario che rimuove un membro,
+     * oppure un membro che esce da solo.
+     */
+    public function destroyMember(Request $request, User $owner, User $user): RedirectResponse
+    {
+        $isOwner = $owner->id === $request->user()->id;
+        $isLeaving = $user->id === $request->user()->id;
+
+        abort_unless($isOwner || $isLeaving, 403);
+        abort_if($user->id === $owner->id, 403, 'Il proprietario non può essere rimosso dal suo budget.');
+
+        $owner->budgetMembers()->detach($user->id);
+
+        return $isLeaving ? to_route('monthly-budgets.index') : back();
     }
 
     /** Il piano del mese da stampare: categorie, voci e importi attesi. */
@@ -92,8 +166,9 @@ class MonthlyBudgetController extends Controller
         $month = (int) $request->integer('month', $now->month);
 
         $user = $request->user();
-        $monthlyBudget = $this->resolver->findMonthlyBudget($user, $year, $month);
-        $categories = $this->resolver->categoriesFor($user, $monthlyBudget);
+        $owner = BudgetOwner::resolve($user, $request->query('budget'));
+        $monthlyBudget = $this->resolver->findMonthlyBudget($owner, $year, $month);
+        $categories = $this->resolver->categoriesFor($owner, $monthlyBudget);
 
         $budgetLines = $monthlyBudget
             ? $monthlyBudget->budgetLines()
@@ -139,7 +214,7 @@ class MonthlyBudgetController extends Controller
 
     public function show(Request $request, MonthlyBudget $monthlyBudget)
     {
-        abort_unless($monthlyBudget->user_id === $request->user()->id, 403);
+        abort_unless($monthlyBudget->user->budgetIsAccessibleBy($request->user()), 403);
 
         return redirect()->route('monthly-budgets.index', [
             'year' => $monthlyBudget->year,
@@ -157,17 +232,17 @@ class MonthlyBudgetController extends Controller
             'budget_lines.*.planned_amount' => 'required|numeric|min:0',
         ]);
 
-        $user = $request->user();
-        $monthlyBudget = $this->resolver->firstOrCreateMonthlyBudget($user, $validated['year'], $validated['month']);
+        $owner = BudgetOwner::resolve($request->user(), $request->input('budget_user_id'));
+        $monthlyBudget = $this->resolver->firstOrCreateMonthlyBudget($owner, $validated['year'], $validated['month']);
 
-        $this->syncBudgetLines($user->id, $monthlyBudget, $validated['budget_lines'] ?? []);
+        $this->syncBudgetLines($owner->id, $monthlyBudget, $validated['budget_lines'] ?? []);
 
         return back()->with('success', 'Budget salvato');
     }
 
     public function update(Request $request, MonthlyBudget $monthlyBudget)
     {
-        abort_unless($monthlyBudget->user_id === $request->user()->id, 403);
+        abort_unless($monthlyBudget->user->budgetIsAccessibleBy($request->user()), 403);
 
         $validated = $request->validate([
             'budget_lines' => 'array',
@@ -175,14 +250,14 @@ class MonthlyBudgetController extends Controller
             'budget_lines.*.planned_amount' => 'required|numeric|min:0',
         ]);
 
-        $this->syncBudgetLines($request->user()->id, $monthlyBudget, $validated['budget_lines'] ?? []);
+        $this->syncBudgetLines($monthlyBudget->user_id, $monthlyBudget, $validated['budget_lines'] ?? []);
 
         return back()->with('success', 'Budget aggiornato');
     }
 
     public function destroy(Request $request, MonthlyBudget $monthlyBudget)
     {
-        abort_unless($monthlyBudget->user_id === $request->user()->id, 403);
+        abort_unless($monthlyBudget->user->budgetIsAccessibleBy($request->user()), 403);
 
         $monthlyBudget->delete();
 

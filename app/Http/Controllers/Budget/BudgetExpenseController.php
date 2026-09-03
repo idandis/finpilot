@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\BudgetCategory;
 use App\Models\BudgetExpense;
 use App\Models\BudgetSubcategory;
+use App\Services\Budget\BudgetOwner;
 use App\Services\Budget\BudgetStructureResolver;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -20,7 +21,7 @@ class BudgetExpenseController extends Controller
         $year = (int) $request->integer('year', $now->year);
         $month = (int) $request->integer('month', $now->month);
 
-        $user = $request->user();
+        $user = BudgetOwner::resolve($request->user(), $request->query('budget'));
         $monthlyBudget = $this->resolver->findMonthlyBudget($user, $year, $month);
         // Questa pagina resta dedicata alle sole uscite.
         $categories = $this->resolver->categoriesFor($user, $monthlyBudget)
@@ -68,7 +69,7 @@ class BudgetExpenseController extends Controller
             'recorded_at' => 'required|date_format:Y-m-d H:i',
         ]);
 
-        $user = $request->user();
+        $user = BudgetOwner::resolve($request->user(), $request->input('budget_user_id'));
         $monthlyBudget = $this->resolver->firstOrCreateMonthlyBudget($user, $validated['year'], $validated['month']);
 
         if (! $this->subcategoryUsableIn($user->id, (int) $validated['budget_subcategory_id'], $monthlyBudget->id)) {
@@ -88,7 +89,7 @@ class BudgetExpenseController extends Controller
 
     public function update(Request $request, BudgetExpense $budgetExpense)
     {
-        abort_unless($budgetExpense->monthlyBudget->user_id === $request->user()->id, 403);
+        abort_unless($budgetExpense->monthlyBudget->user->budgetIsAccessibleBy($request->user()), 403);
 
         $validated = $request->validate([
             'year' => 'required|integer|min:2020|max:2099',
@@ -99,7 +100,7 @@ class BudgetExpenseController extends Controller
             'recorded_at' => 'required|date_format:Y-m-d H:i',
         ]);
 
-        $user = $request->user();
+        $user = $budgetExpense->monthlyBudget->user;
         $monthlyBudget = $this->resolver->firstOrCreateMonthlyBudget($user, $validated['year'], $validated['month']);
 
         if (! $this->subcategoryUsableIn($user->id, (int) $validated['budget_subcategory_id'], $monthlyBudget->id)) {
@@ -119,7 +120,7 @@ class BudgetExpenseController extends Controller
 
     public function destroy(Request $request, BudgetExpense $budgetExpense)
     {
-        abort_unless($budgetExpense->monthlyBudget->user_id === $request->user()->id, 403);
+        abort_unless($budgetExpense->monthlyBudget->user->budgetIsAccessibleBy($request->user()), 403);
 
         $budgetExpense->delete();
 

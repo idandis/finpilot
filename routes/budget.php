@@ -19,6 +19,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('monthly-budgets/pdf', [MonthlyBudgetController::class, 'pdf'])
         ->name('monthly-budgets.pdf');
 
+    // Condivisione del budget: come per la pianificazione dei pasti, il
+    // "contenitore" è il proprietario stesso.
+    Route::post('budget/members', [MonthlyBudgetController::class, 'storeMember'])
+        ->name('budget.members.store');
+    Route::delete('budget/{owner}/members/{user}', [MonthlyBudgetController::class, 'destroyMember'])
+        ->name('budget.members.destroy');
+
     Route::resource('monthly-budgets', MonthlyBudgetController::class)
         ->only(['index', 'show', 'store', 'update', 'destroy']);
 

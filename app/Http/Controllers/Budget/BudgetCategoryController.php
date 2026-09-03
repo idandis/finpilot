@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Budget;
 use App\Http\Controllers\Controller;
 use App\Models\BudgetCategory;
 use App\Models\BudgetSubcategory;
+use App\Services\Budget\BudgetOwner;
 use App\Services\Budget\BudgetStructureResolver;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -17,7 +18,8 @@ class BudgetCategoryController extends Controller
     /** Solo la struttura comune: le voci di un singolo mese si gestiscono dal budget mensile. */
     public function index(Request $request)
     {
-        $categories = $this->resolver->globalCategories($request->user());
+        $owner = BudgetOwner::resolve($request->user(), $request->query('budget'));
+        $categories = $this->resolver->globalCategories($owner);
 
         return Inertia::render('Budget/Categories/Index', [
             'categories' => $categories->map(fn (BudgetCategory $category) => [
@@ -47,7 +49,7 @@ class BudgetCategoryController extends Controller
             'month' => 'required_if:scope,month|integer|min:1|max:12',
         ]);
 
-        $user = $request->user();
+        $user = BudgetOwner::resolve($request->user(), $request->input('budget_user_id'));
         $monthlyBudgetId = $validated['scope'] === 'month'
             ? $this->resolver->firstOrCreateMonthlyBudget($user, (int) $validated['year'], (int) $validated['month'])->id
             : null;
@@ -109,7 +111,7 @@ class BudgetCategoryController extends Controller
             'month' => 'required_if:scope,month|integer|min:1|max:12',
         ]);
 
-        $user = $request->user();
+        $user = $budgetCategory->user;
 
         // Una categoria temporanea vive in un solo mese: le sue sottocategorie
         // seguono sempre quello stesso mese.
@@ -160,9 +162,10 @@ class BudgetCategoryController extends Controller
         return back()->with('success', 'Sottocategoria eliminata');
     }
 
+    /** Proprietario o invitato: chi condivide il budget può modificarne la struttura. */
     private function authorizeCategory(Request $request, BudgetCategory $category): void
     {
-        abort_unless($category->user_id === $request->user()->id, 403);
+        abort_unless($category->user->budgetIsAccessibleBy($request->user()), 403);
     }
 
     private function authorizeSubcategory(Request $request, BudgetSubcategory $subcategory): void

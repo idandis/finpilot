@@ -23,7 +23,7 @@ import type { RouteFormDefinition } from '@/wayfinder';
  * shopping list), and the panel behind them: the owner invites by email and
  * removes people, everyone else can see who's in and leave.
  */
-const props = defineProps<{
+const props = withDefaults(defineProps<{
     title: string;
     people: SharedPerson[];
     isOwner: boolean;
@@ -33,7 +33,11 @@ const props = defineProps<{
     /** One line telling the owner what an invited person will be able to do. */
     permissionHint: string;
     leaveLabel: string;
-}>();
+    /** Dimensione degli avatar nel pulsante, non del pannello. */
+    size?: 'sm' | 'md';
+}>(), { size: 'sm' });
+
+const avatarSizeClass = computed(() => props.size === 'md' ? 'size-10 text-sm' : 'size-8 text-xs');
 
 const emit = defineEmits<{
     remove: [person: SharedPerson];
@@ -59,13 +63,15 @@ const currentPerson = computed<SharedPerson | null>(
         <span
             v-for="person in people"
             :key="person.id"
-            class="flex size-8 items-center justify-center rounded-full text-xs font-semibold text-white ring-2 ring-background"
+            class="flex items-center justify-center rounded-full font-semibold text-white ring-2 ring-background"
+            :class="avatarSizeClass"
             :style="avatarStyle(person.name)"
         >
             {{ getInitials(person.name) }}
         </span>
         <span
-            class="flex size-8 items-center justify-center rounded-full border border-dashed border-muted-foreground/40 text-muted-foreground ring-2 ring-background"
+            class="flex items-center justify-center rounded-full border border-dashed border-muted-foreground/40 text-muted-foreground ring-2 ring-background"
+            :class="avatarSizeClass"
         >
             <Plus class="size-3.5" />
         </span>

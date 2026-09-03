@@ -207,6 +207,51 @@ class User extends Authenticatable implements PasskeyUser
     }
 
     /**
+     * Un budget non ha una tabella propria - è l'insieme di categorie e mesi
+     * di un utente - quindi le relazioni di condivisione stanno qui, come per
+     * la pianificazione dei pasti.
+     *
+     * Le persone con cui questo utente ha condiviso il proprio budget.
+     *
+     * @return BelongsToMany<User, $this>
+     */
+    public function budgetMembers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'budget_members', 'owner_user_id', 'member_user_id')->withTimestamps();
+    }
+
+    /**
+     * I proprietari dei budget condivisi con questo utente.
+     *
+     * @return BelongsToMany<User, $this>
+     */
+    public function sharedBudgets(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'budget_members', 'member_user_id', 'owner_user_id')->withTimestamps();
+    }
+
+    /**
+     * Tutti quelli che lavorano su questo budget, proprietario per primo.
+     *
+     * @return Collection<int, User>
+     */
+    public function budgetPeople(): Collection
+    {
+        return collect([$this])->concat($this->budgetMembers)->values();
+    }
+
+    /**
+     * Proprietario o invitato: il controllo dietro ogni azione sul budget.
+     * Gli invitati sono potenti quanto il proprietario sui contenuti; solo
+     * condividerlo ancora resta del proprietario.
+     */
+    public function budgetIsAccessibleBy(self $user): bool
+    {
+        return $this->id === $user->id
+            || $this->budgetMembers()->whereKey($user->id)->exists();
+    }
+
+    /**
      * @return HasMany<Meal, $this>
      */
     public function meals(): HasMany

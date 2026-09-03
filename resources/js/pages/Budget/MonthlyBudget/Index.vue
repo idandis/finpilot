@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { ArrowDownLeft, ArrowUpRight, ChevronDown, EllipsisVertical, FileDown, Pencil, Plus, Settings, Trash2 } from '@lucide/vue';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
+import { ArrowDownLeft, ArrowUpRight, ChevronDown, EllipsisVertical, FileDown, Pencil, PiggyBank, Plus, Settings, Trash2, Users } from '@lucide/vue';
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import monthlyBudgets from '@/routes/monthly-budgets';
 import budgetCategories from '@/routes/budget-categories';
@@ -11,6 +11,9 @@ import BudgetSummaryRing from '@/components/budget/BudgetSummaryRing.vue';
 import BudgetExpenseSummary from '@/components/budget/BudgetExpenseSummary.vue';
 import BudgetCategoryManager from '@/components/budget/BudgetCategoryManager.vue';
 import BudgetColorPicker from '@/components/budget/BudgetColorPicker.vue';
+import SharedWith from '@/components/SharedWith.vue';
+import type { SharedPerson } from '@/types/sharing';
+import MonthlyBudgetController from '@/actions/App/Http/Controllers/Budget/MonthlyBudgetController';
 import { formatAmount, formatCurrency } from '@/lib/balance-sheet-format';
 import { Button } from '@/components/ui/button';
 import {
@@ -58,6 +61,13 @@ interface Category {
     monthly_budget_id: number | null;
 }
 
+/** Un budget nel selettore: è identificato dal suo proprietario. */
+interface BudgetOption {
+    id: number;
+    name: string;
+    is_shared: boolean;
+}
+
 interface Transaction {
     id: number;
     amount: number;
@@ -79,7 +89,50 @@ const props = defineProps<{
     expenses: Record<number, number>;
     transactions: Transaction[];
     monthlyBudget: number | null;
+    budgets: BudgetOption[];
+    budget: {
+        id: number;
+        name: string;
+        is_owner: boolean;
+        people: SharedPerson[];
+    };
 }>();
+
+const page = usePage();
+
+// Il budget condiviso viaggia in query string sulle letture e nel payload
+// sulle scritture: senza, ogni azione tornerebbe a scrivere sul proprio.
+const sharedBudgetQuery = computed(() =>
+    props.budget.is_owner ? {} : { budget: props.budget.id });
+
+const budgetOwnerId = computed(() => props.budget.is_owner ? null : props.budget.id);
+
+const budgetTitle = computed(() =>
+    props.budget.is_owner ? 'Budget' : `Budget di ${props.budget.name}`);
+
+const goToBudget = (option: BudgetOption) => {
+    router.get(monthlyBudgets.index.url({
+        query: {
+            year: currentYear.value,
+            month: currentMonth.value,
+            ...(option.is_shared ? { budget: option.id } : {}),
+        },
+    }));
+};
+
+const removeBudgetMember = (person: SharedPerson) => {
+    if (!confirm(`Rimuovere ${person.name} dal tuo budget? Non lo vedrà più.`)) return;
+
+    router.delete(MonthlyBudgetController.destroyMember([props.budget.id, person.id]).url, {
+        preserveScroll: true,
+    });
+};
+
+const leaveBudget = (person: SharedPerson) => {
+    if (!confirm(`Uscire dal budget di ${props.budget.name}? Non lo vedrai più finché non ti reinvitano.`)) return;
+
+    router.delete(MonthlyBudgetController.destroyMember([props.budget.id, person.id]).url);
+};
 
 const months = [
     'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
@@ -114,6 +167,7 @@ const categoryForm = useForm({
     scope: 'month',
     year: props.year,
     month: props.month,
+    budget_user_id: null as number | null,
 });
 
 const subcategoryForm = useForm({
@@ -124,6 +178,7 @@ const subcategoryForm = useForm({
 });
 
 const movementForm = useForm({
+    budget_user_id: null as number | null,
     year: props.year,
     month: props.month,
     budget_subcategory_id: null as number | null,
@@ -304,6 +359,7 @@ const navigateToMonth = () => {
         query: {
             year: currentYear.value,
             month: currentMonth.value,
+            ...sharedBudgetQuery.value,
         }
     }));
 
@@ -353,6 +409,7 @@ function flushSave() {
             // l'utente sta per aprire con le pillole.
             year: props.year,
             month: props.month,
+            budget_user_id: budgetOwnerId.value,
             budget_lines: ids.map((id) => ({
                 subcategory_id: id,
                 planned_amount: budgetData.value[id] ?? 0,
@@ -395,7 +452,11 @@ const updateBudgetLine = (subcategoryId: number, amount: string) => {
 const isDownloadingPdf = ref(false);
 
 const pdfUrl = () => monthlyBudgets.pdf.url({
-    query: { year: currentYear.value, month: currentMonth.value },
+    query: {
+        year: currentYear.value,
+        month: currentMonth.value,
+        ...sharedBudgetQuery.value,
+    },
 });
 
 // In app installata una <a href> al PDF sostituisce la pagina e non si torna
@@ -438,6 +499,7 @@ const openAddCategory = (direction: Direction) => {
 const submitCategory = () => {
     categoryForm.year = currentYear.value;
     categoryForm.month = currentMonth.value;
+    categoryForm.budget_user_id = budgetOwnerId.value;
 
     categoryForm.post(budgetCategories.store.url(), {
         preserveScroll: true,
@@ -647,6 +709,7 @@ const openAddMovement = () => {
 };
 
 const submitMovement = () => {
+    movementForm.budget_user_id = budgetOwnerId.value;
     movementForm.year = currentYear.value;
     movementForm.month = currentMonth.value;
     movementForm.amount = movementForm.amount.replace(',', '.');
@@ -747,11 +810,52 @@ const transactionDays = computed(() => {
 </script>
 
 <template>
-    <Head title="Budget Mensile" />
+    <Head title="Budget" />
 
     <div class="mx-auto flex w-full max-w-[64rem] flex-col space-y-6 p-4 pb-28">
         <div class="flex items-center justify-between gap-4">
-            <h2 class="text-xl font-semibold tracking-tight">Budget Mensile</h2>
+            <div class="flex min-w-0 items-center gap-3">
+                <DropdownMenu v-if="budgets.length > 1">
+                    <DropdownMenuTrigger as-child>
+                        <button
+                            class="flex min-w-0 items-center gap-1 text-xl font-semibold tracking-tight"
+                            title="Cambia budget"
+                        >
+                            <span class="truncate">{{ budgetTitle }}</span>
+                            <ChevronDown class="size-4 shrink-0 text-muted-foreground" />
+                        </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                        <DropdownMenuItem
+                            v-for="option in budgets"
+                            :key="option.id"
+                            @click="goToBudget(option)"
+                        >
+                            <component :is="option.is_shared ? Users : PiggyBank" class="size-4" />
+                            {{ option.name }}
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+
+                <h2 v-else class="shrink-0 truncate text-xl font-semibold tracking-tight">
+                    {{ budgetTitle }}
+                </h2>
+
+                <SharedWith
+                    class="shrink-0"
+                    size="md"
+                    :title="budget.is_owner ? 'Condividi il tuo budget' : `Budget di ${budget.name}`"
+                    :people="budget.people"
+                    :is-owner="budget.is_owner"
+                    :current-user-id="page.props.auth.user.id"
+                    :invite-form="MonthlyBudgetController.storeMember.form()"
+                    permission-hint="Deve essere già registrata sulla piattaforma. Chi entra vede e modifica categorie, importi attesi e movimenti come te."
+                    leave-label="Esci dal budget"
+                    @remove="removeBudgetMember"
+                    @leave="leaveBudget"
+                />
+            </div>
+
             <div class="flex items-center gap-2">
                 <Button
                     variant="outline"
@@ -766,7 +870,7 @@ const transactionDays = computed(() => {
 
                 <Button variant="outline" size="icon-sm" as-child>
                     <Link
-                        :href="budgetCategories.index.url()"
+                        :href="budgetCategories.index.url({ query: sharedBudgetQuery })"
                         title="Configura categorie e voci"
                         aria-label="Configura categorie e voci"
                     >

@@ -74,6 +74,21 @@ final class SharedResource
     }
 
     /**
+     * Nemmeno un budget ha una tabella propria: è l'insieme di categorie e
+     * mesi di un utente, quindi lo identifica il proprietario.
+     */
+    public static function forBudget(User $owner): self
+    {
+        return new self(
+            kind: 'budget',
+            label: 'Budget',
+            name: 'Budget di '.$owner->name,
+            url: route('monthly-budgets.index', ['budget' => $owner->id], absolute: false),
+            people: $owner->budgetPeople(),
+        );
+    }
+
+    /**
      * Tells everyone else on the resource what the actor just did, e.g.
      * 'ha aggiunto "Mele"'. Nobody else on it means nothing to send.
      */
