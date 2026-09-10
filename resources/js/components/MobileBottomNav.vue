@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { KanbanSquare, KeyRound, LayoutGrid, ShoppingCart, Sparkles, Wallet } from '@lucide/vue';
+import { KanbanSquare, KeyRound, LayoutGrid, Menu, ShoppingCart, Sparkles, Wallet } from '@lucide/vue';
 import { onMounted, onUnmounted, ref } from 'vue';
+import { useSidebar } from '@/components/ui/sidebar';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { dashboard } from '@/routes';
 import * as aiChat from '@/routes/ai-chat';
@@ -11,6 +12,9 @@ import * as shoppingLists from '@/routes/shopping-lists';
 import * as tasks from '@/routes/tasks';
 
 const { isCurrentUrl } = useCurrentUrl();
+
+// Il resto del menu vive nella sidebar: da qui la si tira fuori.
+const { setOpenMobile } = useSidebar();
 
 const items = [
     { href: aiChat.index(), icon: Sparkles, label: 'AI' },
@@ -40,10 +44,18 @@ onUnmounted(() => {
 </script>
 
 <template>
+    <!--
+        Dodici pixel dal bordo, sempre gli stessi.
+
+        Qui la barra non somma `env(safe-area-inset-bottom)`: su un iPhone col
+        gesto a scorrimento sono altri 34px, e il menu finiva a mezzo dito da
+        dove uno se lo aspetta. La pillola galleggia sopra al contenuto e non
+        ha niente da leggere sotto, quindi appoggiarla al bordo non nasconde
+        nulla - si sovrappone alla zona del trattino solo di striscio.
+    -->
     <nav
-        class="fixed left-1/2 z-30 flex -translate-x-1/2 items-center rounded-full border bg-muted/50 shadow-lg backdrop-blur-md transition-all duration-300 ease-out md:hidden"
-        :class="isCompact ? 'gap-0.5 px-1.5 py-1.5' : 'gap-1 px-2 py-2'"
-        style="bottom: calc(1rem + env(safe-area-inset-bottom))"
+        class="fixed bottom-3 left-1/2 z-30 flex -translate-x-1/2 items-center rounded-full border bg-muted/50 shadow-lg backdrop-blur-md transition-all duration-300 ease-out md:hidden"
+        :class="isCompact ? 'gap-0.5 px-1.5 py-1.5' : 'gap-0.5 px-2 py-2'"
     >
         <Link
             v-for="item in items"
@@ -58,5 +70,14 @@ onUnmounted(() => {
         >
             <component :is="item.icon" :class="isCompact ? 'size-5' : 'size-6'" />
         </Link>
+
+        <button
+            aria-label="Apri il menu"
+            class="flex shrink-0 items-center justify-center rounded-full text-muted-foreground transition-all duration-300 ease-out hover:text-foreground"
+            :class="isCompact ? 'size-9' : 'size-11'"
+            @click="setOpenMobile(true)"
+        >
+            <Menu :class="isCompact ? 'size-5' : 'size-6'" />
+        </button>
     </nav>
 </template>

@@ -12,28 +12,45 @@ class MonthlyBudget extends Model
 
     protected $casts = ['year' => 'integer', 'month' => 'integer'];
 
+    /**
+     * @return BelongsTo<User, $this>
+     */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    /**
+     * @return HasMany<MonthlyBudgetLine, $this>
+     */
     public function budgetLines(): HasMany
     {
         return $this->hasMany(MonthlyBudgetLine::class);
     }
 
+    /**
+     * @return HasMany<BudgetExpense, $this>
+     */
     public function expenses(): HasMany
     {
         return $this->hasMany(BudgetExpense::class);
     }
 
-    /** Categorie create solo per questo mese. */
+    /**
+     * Categorie create solo per questo mese.
+     *
+     * @return HasMany<BudgetCategory, $this>
+     */
     public function categories(): HasMany
     {
         return $this->hasMany(BudgetCategory::class)->orderBy('order');
     }
 
-    /** Sottocategorie create solo per questo mese. */
+    /**
+     * Sottocategorie create solo per questo mese.
+     *
+     * @return HasMany<BudgetSubcategory, $this>
+     */
     public function subcategories(): HasMany
     {
         return $this->hasMany(BudgetSubcategory::class)->orderBy('order');

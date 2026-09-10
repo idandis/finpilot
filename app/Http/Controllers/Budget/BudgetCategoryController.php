@@ -91,6 +91,34 @@ class BudgetCategoryController extends Controller
         return back()->with('success', 'Categoria aggiornata');
     }
 
+    /**
+     * Il nuovo ordine delle categorie, come arriva dal trascinamento: la
+     * posizione nell'elenco diventa la colonna `order`, usata poi ovunque le
+     * categorie vengano lette (configurazione e budget mensile).
+     */
+    public function reorder(Request $request)
+    {
+        $validated = $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'required|integer|distinct|exists:budget_categories,id',
+        ]);
+
+        $categories = BudgetCategory::query()
+            ->whereIn('id', $validated['ids'])
+            ->with('user')
+            ->get();
+
+        foreach ($categories as $category) {
+            $this->authorizeCategory($request, $category);
+        }
+
+        foreach ($validated['ids'] as $position => $id) {
+            $categories->firstWhere('id', $id)?->update(['order' => $position]);
+        }
+
+        return back();
+    }
+
     public function destroy(Request $request, BudgetCategory $budgetCategory)
     {
         $this->authorizeCategory($request, $budgetCategory);

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3';
-import { Plus, Trash2 } from '@lucide/vue';
+import { CircleDashed, Plus, Trash2 } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import budgetExpenses from '@/routes/budget-expenses';
 import Heading from '@/components/Heading.vue';
@@ -14,6 +14,12 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import {
+    accountIcon,
+    accountTypeLabels,
+    selectableAccounts,
+} from '@/lib/budget-accounts';
+import type { BudgetAccount } from '@/lib/budget-accounts';
 
 interface Subcategory {
     id: number;
@@ -32,11 +38,16 @@ const props = defineProps<{
     expenses: Array<{
         id: number;
         budget_subcategory_id: number;
+        financial_account_id: number | null;
         amount: number;
         description: string;
         recorded_at: string;
     }>;
+    accounts: BudgetAccount[];
 }>();
+
+// Il select non regge un valore nullo: i contanti hanno una voce tutta loro.
+const CASH = 'cash' as const;
 
 const now = new Date();
 const currentYear = ref(now.getFullYear());
@@ -45,6 +56,7 @@ const currentDate = ref(now.toISOString().split('T')[0]);
 const currentTime = ref(now.toTimeString().slice(0, 5));
 
 const selectedSubcategoryId = ref<number | null>(null);
+const selectedAccountId = ref<number | typeof CASH>(CASH);
 const amount = ref('');
 const description = ref('');
 
@@ -52,10 +64,14 @@ const form = useForm({
     year: currentYear.value,
     month: currentMonth.value,
     budget_subcategory_id: null as number | null,
+    financial_account_id: null as number | null,
     amount: '',
     description: '',
     recorded_at: '',
 });
+
+// Un conto archiviato non si propone su una spesa nuova.
+const visibleAccounts = computed(() => selectableAccounts(props.accounts));
 
 const allSubcategories = computed(() => {
     return props.categories.flatMap(cat =>
@@ -79,6 +95,8 @@ const submitExpense = () => {
     const recordedDateTime = `${currentDate.value} ${currentTime.value}`;
 
     form.budget_subcategory_id = selectedSubcategoryId.value;
+    form.financial_account_id =
+        selectedAccountId.value === CASH ? null : selectedAccountId.value;
     form.amount = amount.value;
     form.description = description.value;
     form.recorded_at = recordedDateTime;
@@ -161,6 +179,44 @@ const deleteExpense = (expenseId: number) => {
                                     {{ sub.name }}
                                 </SelectItem>
                             </div>
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <!-- Account -->
+                <div class="grid gap-2">
+                    <Label for="account">Da quale conto</Label>
+                    <Select v-model="selectedAccountId">
+                        <SelectTrigger id="account">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem
+                                v-for="account in visibleAccounts"
+                                :key="account.id"
+                                :value="account.id"
+                            >
+                                <span class="flex items-center gap-2">
+                                    <span
+                                        class="flex size-5 items-center justify-center rounded text-white"
+                                        :style="{ backgroundColor: account.color ?? '#3b82f6' }"
+                                    >
+                                        <component :is="accountIcon(account.icon)" class="size-3" />
+                                    </span>
+                                    {{ account.name }}
+                                    <span class="text-xs text-muted-foreground">
+                                        {{ accountTypeLabels[account.type] ?? account.type }}
+                                    </span>
+                                </span>
+                            </SelectItem>
+                            <SelectItem :value="CASH">
+                                <span class="flex items-center gap-2">
+                                    <span class="flex size-5 items-center justify-center rounded bg-muted-foreground/20">
+                                        <CircleDashed class="size-3" />
+                                    </span>
+                                    Non indicato
+                                </span>
+                            </SelectItem>
                         </SelectContent>
                     </Select>
                 </div>

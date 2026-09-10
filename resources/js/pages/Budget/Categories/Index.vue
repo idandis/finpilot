@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { ChevronRight, Pencil, Plus, Trash2 } from '@lucide/vue';
-import { computed, ref } from 'vue';
+import { ChevronRight, GripVertical, Pencil, Plus, Trash2 } from '@lucide/vue';
+import { computed, ref, watch } from 'vue';
 import budgetCategories from '@/routes/budget-categories';
 import budgetSubcategories from '@/routes/budget-subcategories';
 import BudgetColorPicker from '@/components/budget/BudgetColorPicker.vue';
@@ -38,22 +38,109 @@ const props = defineProps<{
     categories: Category[];
 }>();
 
+// Copia locale riordinabile: il trascinamento muove le righe subito, il
+// server conferma dopo. Si riallinea a ogni nuovo giro di props.
+const ordered = ref<Category[]>([...props.categories]);
+
+watch(() => props.categories, (categories) => {
+    ordered.value = [...categories];
+});
+
+const categoriesOf = (type: Direction) =>
+    ordered.value.filter((category) => category.type === type);
+
 const groups = computed(() => [
     {
         type: 'income' as Direction,
         title: 'Entrate',
         addLabel: 'Entrata',
         emptyLabel: 'Nessuna categoria di entrata.',
-        categories: props.categories.filter((category) => category.type === 'income'),
+        categories: categoriesOf('income'),
     },
     {
         type: 'expense' as Direction,
         title: 'Uscite',
         addLabel: 'Uscita',
         emptyLabel: 'Nessuna categoria di uscita.',
-        categories: props.categories.filter((category) => category.type === 'expense'),
+        categories: categoriesOf('expense'),
     },
 ]);
+
+// Trascinamento con i pointer events invece del drag&drop nativo dell'HTML:
+// quello non parte al tocco, e su mobile sarebbe rimasto inutilizzabile.
+const draggingId = ref<number | null>(null);
+const draggingType = ref<Direction | null>(null);
+const hasMoved = ref(false);
+
+// L'ordine si salva per gruppo: entrate e uscite sono elenchi separati e una
+// categoria non passa dall'uno all'altro trascinandola.
+const persistOrder = (type: Direction) => {
+    router.post(
+        budgetCategories.reorder.url(),
+        { ids: categoriesOf(type).map((category) => category.id) },
+        { preserveScroll: true, preserveState: true, only: ['categories'] },
+    );
+};
+
+/** Sposta la riga nella copia locale. Vero se qualcosa è cambiato davvero. */
+const reorderLocally = (type: Direction, from: number, to: number) => {
+    const group = categoriesOf(type);
+
+    if (from === to || from < 0 || to < 0 || to >= group.length) return false;
+
+    const moved = group[from];
+    const rest = group.filter((category) => category.id !== moved.id);
+    rest.splice(to, 0, moved);
+
+    // `ordered` tiene entrambi i versi: rimonto solo il gruppo toccato.
+    const others = ordered.value.filter((category) => category.type !== type);
+    ordered.value = type === 'income' ? [...rest, ...others] : [...others, ...rest];
+
+    return true;
+};
+
+const startDrag = (category: Category, event: PointerEvent) => {
+    draggingId.value = category.id;
+    draggingType.value = category.type;
+    hasMoved.value = false;
+
+    // Con la cattura del pointer i movimenti continuano ad arrivare alla
+    // maniglia anche quando il dito è ormai sopra un'altra riga.
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+};
+
+const dragOverRow = (event: PointerEvent) => {
+    const type = draggingType.value;
+
+    if (draggingId.value === null || type === null) return;
+
+    const row = document.elementFromPoint(event.clientX, event.clientY)
+        ?.closest('[data-category-id]');
+    const targetId = Number(row?.getAttribute('data-category-id') ?? 0);
+
+    if (!targetId || targetId === draggingId.value) return;
+
+    const group = categoriesOf(type);
+    const from = group.findIndex((category) => category.id === draggingId.value);
+    const to = group.findIndex((category) => category.id === targetId);
+
+    // Riga di un altro gruppo: si resta dove si è.
+    if (to === -1) return;
+
+    if (reorderLocally(type, from, to)) {
+        hasMoved.value = true;
+    }
+};
+
+const endDrag = () => {
+    if (draggingType.value !== null && hasMoved.value) {
+        persistOrder(draggingType.value);
+    }
+
+    draggingId.value = null;
+    draggingType.value = null;
+    hasMoved.value = false;
+};
 
 const positionLabel = (index: number) => String(index + 1).padStart(2, '0');
 
@@ -216,16 +303,33 @@ const deleteCategory = (category: Category) => {
                 <div
                     v-for="(category, index) in group.categories"
                     :key="category.id"
-                    class="group/row"
+                    :data-category-id="category.id"
+                    class="group/row transition-colors"
+                    :class="draggingId === category.id ? 'bg-primary/10 ring-2 ring-inset ring-primary/40' : ''"
                     :style="{
-                        backgroundColor: expandedCategories.has(category.id)
+                        backgroundColor: expandedCategories.has(category.id) && draggingId !== category.id
                             ? `${category.color}12`
-                            : 'transparent',
+                            : undefined,
                     }"
                 >
                     <div class="flex items-center gap-1 pr-2">
+                        <!-- Maniglia: il trascinamento parte da qui, così il
+                             resto della riga resta cliccabile per aprirla.
+                             `touch-none` impedisce alla pagina di scorrere
+                             mentre si trascina col dito. -->
+                        <span
+                            class="shrink-0 cursor-grab touch-none py-3 pl-3 text-muted-foreground active:cursor-grabbing"
+                            :title="`Trascina per riordinare ${category.name}`"
+                            @pointerdown="startDrag(category, $event)"
+                            @pointermove="dragOverRow"
+                            @pointerup="endDrag"
+                            @pointercancel="endDrag"
+                        >
+                            <GripVertical class="size-4" />
+                        </span>
+
                         <button
-                            class="flex min-w-0 flex-1 items-center gap-3 py-3 pl-5 text-left"
+                            class="flex min-w-0 flex-1 items-center gap-3 py-3 pl-2 text-left sm:pl-3"
                             @click="toggleCategory(category)"
                         >
                             <span class="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">

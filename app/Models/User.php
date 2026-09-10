@@ -20,6 +20,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
 
 /**
  * @property int $id
+ * @property int|null $default_budget_user_id Il budget che si apre per primo; nullo = il proprio.
  * @property string $name
  * @property string $email
  * @property Carbon|null $email_verified_at
@@ -31,7 +32,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name', 'email', 'password'])]
+#[Fillable(['name', 'email', 'password', 'default_budget_user_id'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements PasskeyUser
 {
@@ -58,6 +59,14 @@ class User extends Authenticatable implements PasskeyUser
     public function financialAccounts(): HasMany
     {
         return $this->hasMany(FinancialAccount::class);
+    }
+
+    /**
+     * @return HasMany<AccountTransfer, $this>
+     */
+    public function accountTransfers(): HasMany
+    {
+        return $this->hasMany(AccountTransfer::class);
     }
 
     /**

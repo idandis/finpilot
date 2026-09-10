@@ -234,6 +234,37 @@ class BudgetCategoryControllerTest extends TestCase
         $this->assertDatabaseCount('budget_expenses', 0);
     }
 
+    public function test_it_saves_the_order_of_the_categories()
+    {
+        $user = User::factory()->create();
+        $first = $this->category($user, 'Bollette');
+        $second = $this->category($user, 'Casa');
+
+        $this->actingAs($user)
+            ->post(route('budget-categories.reorder'), ['ids' => [$second->id, $first->id]])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(0, $second->fresh()->order);
+        $this->assertSame(1, $first->fresh()->order);
+
+        $this->actingAs($user)
+            ->get(route('budget-categories.index'))
+            ->assertInertia(fn ($page) => $page->where('categories.0.name', 'Casa'));
+    }
+
+    public function test_it_refuses_to_reorder_categories_of_another_user()
+    {
+        $owner = User::factory()->create();
+        $intruder = User::factory()->create();
+        $category = $this->category($owner, 'Bollette');
+
+        $this->actingAs($intruder)
+            ->post(route('budget-categories.reorder'), ['ids' => [$category->id]])
+            ->assertForbidden();
+
+        $this->assertSame(0, $category->fresh()->order);
+    }
+
     public function test_it_refuses_to_touch_categories_of_another_user()
     {
         $owner = User::factory()->create();

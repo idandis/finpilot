@@ -196,3 +196,29 @@
     background: color-mix(in srgb, var(--primary) 65%, transparent);
 }
 /* End Scrollbar */
+
+/*
+ * L'altezza dei fogli (i pannelli a scomparsa di Conti e Budget).
+ *
+ * Sta qui e non in uno `<style scoped>` della pagina: il pannello lo disegna
+ * `<DialogContent>`, che ha la radice dentro a un Teleport e più di un nodo,
+ * quindi Vue gli passa le classi ma non l'attributo di scope. Una regola
+ * scoped verrebbe scritta come `.sheet-panel[data-v-…]` e non aggancerebbe
+ * niente: il foglio crescerebbe oltre lo schermo e `overflow-hidden`
+ * taglierebbe la testa e i piedi invece di far scorrere il contenuto.
+ *
+ * `svh` misura lo schermo con la barra degli indirizzi di Safari aperta, ed è
+ * la misura giusta - ma esiste solo da iOS 15.4, e senza il ripiego in `vh` i
+ * telefoni più vecchi resterebbero senza altezza massima.
+ */
+.sheet-panel {
+    max-height: 92vh;
+    max-height: 92svh;
+}
+
+@media (min-width: 640px) {
+    .sheet-panel {
+        max-height: 88vh;
+        max-height: 88svh;
+    }
+}

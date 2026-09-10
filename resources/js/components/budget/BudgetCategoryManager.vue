@@ -16,6 +16,7 @@ import {
     SheetHeader,
     SheetTitle,
 } from '@/components/ui/sheet';
+import { avatarStyle } from '@/lib/avatar-color';
 
 interface Subcategory {
     id: number;
@@ -42,7 +43,16 @@ interface Transaction {
     category_id: number | null;
     category_name: string | null;
     category_color: string | null;
-    direction: 'income' | 'expense';
+    direction: 'income' | 'expense' | 'transfer';
+    account_id: number | null;
+    account_name: string | null;
+    account_color: string | null;
+    recorded_by_id: number | null;
+    recorded_by_name: string | null;
+    kind: 'movement' | 'transfer';
+    to_account_id: number | null;
+    to_account_name: string | null;
+    to_account_color: string | null;
 }
 
 const open = defineModel<boolean>('open', { required: true });
@@ -52,6 +62,8 @@ const props = defineProps<{
     planned: Record<number, number>;
     actual: Record<number, number>;
     transactions: Transaction[];
+    /** Solo in un budget condiviso: da soli la firma su ogni riga è rumore. */
+    showRecordedBy: boolean;
     monthLabel: string;
     year: number;
     month: number;
@@ -160,6 +172,14 @@ interface Draft {
 }
 
 const pad = (value: number) => String(value).padStart(2, '0');
+
+/** Sulla pastiglia ci sta il nome di battesimo, non il nome intero. */
+const recordedByLabel = (transaction: Transaction) =>
+    transaction.recorded_by_name?.split(' ')[0] ?? null;
+
+/** Lo stesso colore dell'avatar: `avatarStyle` lo ricava dal nome intero. */
+const recordedByStyle = (transaction: Transaction) =>
+    avatarStyle(transaction.recorded_by_name ?? '');
 
 const draftOf = (transaction: Transaction): Draft => {
     const moment = transaction.recorded_at ? new Date(transaction.recorded_at) : new Date();
@@ -349,6 +369,8 @@ const saveTransaction = (transaction: Transaction) => {
                                     @blur="saveTransaction(transaction)"
                                     @keyup.enter="saveTransaction(transaction)"
                                 />
+
+                                <span v-if="showRecordedBy && recordedByLabel(transaction)" class="max-w-20 shrink-0 truncate rounded-full px-2 py-0.5 text-[11px] font-semibold text-white" :style="recordedByStyle(transaction)" :title="`Registrato da ${transaction.recorded_by_name}`">{{ recordedByLabel(transaction) }}</span>
 
                                 <input
                                     v-model="drafts[transaction.id].amount"

@@ -4,16 +4,20 @@ namespace App\Http\Controllers\Budget;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Budget\BudgetMemberStoreRequest;
+use App\Models\AccountTransfer;
 use App\Models\BudgetCategory;
 use App\Models\BudgetExpense;
 use App\Models\BudgetSubcategory;
+use App\Models\FinancialAccount;
 use App\Models\MonthlyBudget;
 use App\Models\MonthlyBudgetLine;
 use App\Models\User;
+use App\Services\Budget\BudgetAccountBalances;
 use App\Services\Budget\BudgetOwner;
 use App\Services\Budget\BudgetStructureResolver;
 use App\Services\Sharing\SharedResource;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Contracts\Database\Query\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
@@ -22,7 +26,10 @@ use Inertia\Inertia;
 
 class MonthlyBudgetController extends Controller
 {
-    public function __construct(private readonly BudgetStructureResolver $resolver) {}
+    public function __construct(
+        private readonly BudgetStructureResolver $resolver,
+        private readonly BudgetAccountBalances $balances,
+    ) {}
 
     public function index(Request $request)
     {
@@ -41,33 +48,24 @@ class MonthlyBudgetController extends Controller
                 ->mapWithKeys(fn ($line) => [$line->budget_subcategory_id => (float) $line->planned_amount])
             : collect();
 
+        // I conti sono personali, ma i movimenti del mese sono di tutti: per
+        // sapere quali nascondere servono i conti esclusi di chiunque scriva
+        // su questo budget, non solo quelli del proprietario.
+        $excludedAccounts = FinancialAccount::query()
+            ->whereIn('user_id', $owner->budgetPeople()->pluck('id'))
+            ->where('excluded_from_stats', true)
+            ->pluck('id');
+
         $expenses = $monthlyBudget
             ? $monthlyBudget->expenses()
+                ->where($this->notOnExcludedAccount('financial_account_id', $excludedAccounts))
                 ->selectRaw('budget_subcategory_id, SUM(amount) as total_amount')
                 ->groupBy('budget_subcategory_id')
                 ->get()
                 ->mapWithKeys(fn ($expense) => [$expense->budget_subcategory_id => (float) $expense->total_amount])
             : collect();
 
-        $transactions = $monthlyBudget
-            ? $monthlyBudget->expenses()
-                ->with('subcategory.category')
-                ->orderByDesc('recorded_at')
-                ->orderByDesc('id')
-                ->get()
-                ->map(fn (BudgetExpense $expense) => [
-                    'id' => $expense->id,
-                    'amount' => (float) $expense->amount,
-                    'description' => $expense->description,
-                    'recorded_at' => $expense->recorded_at?->toIso8601String(),
-                    'subcategory_id' => $expense->budget_subcategory_id,
-                    'subcategory_name' => $expense->subcategory?->name,
-                    'category_id' => $expense->subcategory?->category?->id,
-                    'category_name' => $expense->subcategory?->category?->name,
-                    'category_color' => $expense->subcategory?->category?->color,
-                    'direction' => $expense->subcategory?->category?->type ?? BudgetCategory::TYPE_EXPENSE,
-                ])
-            : collect();
+        $transactions = $this->timeline($user, $monthlyBudget, $year, $month, $excludedAccounts);
 
         return Inertia::render('Budget/MonthlyBudget/Index', [
             'year' => $year,
@@ -88,22 +86,170 @@ class MonthlyBudgetController extends Controller
             'expenses' => $expenses,
             'transactions' => $transactions,
             'monthlyBudget' => $monthlyBudget?->id,
+            // Le tile e il selettore dei movimenti mostrano i conti di chi
+            // guarda: su un budget condiviso ognuno vede i propri.
+            'accounts' => $this->balances->listFor($user),
             'budgets' => $this->accessibleBudgets($user),
             'budget' => $this->serializeBudget($owner, $user),
         ]);
     }
 
     /**
+     * Tutto quello che è successo nel mese, dal più recente: i movimenti del
+     * budget e i trasferimenti tra conti, in un elenco solo.
+     *
+     * I trasferimenti non stanno dentro al budget del mese - non sono spese -
+     * quindi si pescano per data, e compaiono anche in un mese che di budget
+     * non ne ha ancora uno. E siccome spostano soldi fra conti, che sono
+     * personali, si vedono solo i propri: i movimenti del budget invece sono
+     * di tutti quelli che ci lavorano.
+     *
+     * @param  Collection<int, int>  $excludedAccounts
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function timeline(User $viewer, ?MonthlyBudget $monthlyBudget, int $year, int $month, Collection $excludedAccounts)
+    {
+        $movements = $monthlyBudget
+            ? $monthlyBudget->expenses()
+                ->where($this->notOnExcludedAccount('financial_account_id', $excludedAccounts))
+                ->with(['subcategory.category', 'financialAccount', 'recordedBy'])
+                ->get()
+                ->map(fn (BudgetExpense $expense) => [
+                    'id' => $expense->id,
+                    'kind' => 'movement',
+                    'amount' => (float) $expense->amount,
+                    'description' => $expense->description,
+                    'recorded_at' => $expense->recorded_at?->toIso8601String(),
+                    'subcategory_id' => $expense->budget_subcategory_id,
+                    'subcategory_name' => $expense->subcategory?->name,
+                    'category_id' => $expense->subcategory?->category?->id,
+                    'category_name' => $expense->subcategory?->category?->name,
+                    'category_color' => $expense->subcategory?->category?->color,
+                    'direction' => $expense->subcategory?->category?->type ?? BudgetCategory::TYPE_EXPENSE,
+                    'account_id' => $expense->financial_account_id,
+                    'account_name' => $expense->financialAccount?->name,
+                    'account_color' => $expense->financialAccount?->color,
+                    'recorded_by_id' => $expense->recorded_by_user_id,
+                    'recorded_by_name' => $expense->recordedBy?->name,
+                    'to_account_id' => null,
+                    'to_account_name' => null,
+                    'to_account_color' => null,
+                ])
+            : collect();
+
+        $transfers = $viewer->accountTransfers()
+            ->with(['fromAccount', 'toAccount', 'recordedBy'])
+            ->whereYear('transferred_at', $year)
+            ->whereMonth('transferred_at', $month)
+            ->where($this->notOnExcludedAccount('from_financial_account_id', $excludedAccounts))
+            ->where($this->notOnExcludedAccount('to_financial_account_id', $excludedAccounts))
+            ->get()
+            ->map(fn (AccountTransfer $transfer) => [
+                'id' => $transfer->id,
+                'kind' => 'transfer',
+                'amount' => (float) $transfer->amount,
+                'description' => $transfer->description,
+                'recorded_at' => $transfer->transferred_at->toIso8601String(),
+                'subcategory_id' => null,
+                'subcategory_name' => null,
+                'category_id' => null,
+                'category_name' => null,
+                'category_color' => null,
+                'direction' => 'transfer',
+                'account_id' => $transfer->from_financial_account_id,
+                'account_name' => $transfer->fromAccount?->name,
+                'account_color' => $transfer->fromAccount?->color,
+                'recorded_by_id' => $transfer->recorded_by_user_id,
+                'recorded_by_name' => $transfer->recordedBy?->name,
+                'to_account_id' => $transfer->to_financial_account_id,
+                'to_account_name' => $transfer->toAccount?->name,
+                'to_account_color' => $transfer->toAccount?->color,
+            ]);
+
+        return $movements->concat($transfers)
+            ->sortByDesc(fn (array $entry) => [$entry['recorded_at'] ?? '', $entry['id']])
+            ->values();
+    }
+
+    /**
+     * Un movimento passato da un conto escluso dalle statistiche, per il
+     * budget non è mai successo: fuori dallo speso e fuori dall'elenco del
+     * mese. Un trasferimento basta che tocchi il conto da una delle due parti.
+     *
+     * La colonna può essere vuota - un movimento in contanti, un giro verso
+     * "non indicato" - e in SQL `NULL NOT IN (…)` non è vero: senza il ramo
+     * sul nullo quei movimenti sparirebbero insieme agli altri.
+     *
+     * @param  Collection<int, int>  $excluded
+     * @return \Closure(Builder): void
+     */
+    private function notOnExcludedAccount(string $column, Collection $excluded): \Closure
+    {
+        return function ($query) use ($column, $excluded) {
+            if ($excluded->isEmpty()) {
+                return;
+            }
+
+            $query->whereNull($column)->orWhereNotIn($column, $excluded);
+        };
+    }
+
+    /**
      * Il selettore: prima il proprio budget, poi quelli condivisi, ognuno
      * identificato dal suo proprietario.
      *
-     * @return Collection<int, array{id: int, name: string, is_shared: bool}>
+     * @return Collection<int, array{id: int, name: string, is_shared: bool, is_default: bool}>
      */
     private function accessibleBudgets(User $user)
     {
-        return collect([['id' => $user->id, 'name' => 'Il mio budget', 'is_shared' => false]])
-            ->concat($user->sharedBudgets()->orderBy('name')->get()
-                ->map(fn (User $owner) => ['id' => $owner->id, 'name' => $owner->name, 'is_shared' => true]));
+        // Nessuna scelta vale come "il mio": è quello che si apriva prima che
+        // il predefinito esistesse.
+        $default = $user->default_budget_user_id ?? $user->id;
+
+        return collect([[
+            'id' => $user->id,
+            'name' => 'Il mio budget',
+            'is_shared' => false,
+            'is_default' => $default === $user->id,
+        ]])->concat($user->sharedBudgets()->orderBy('name')->get()
+            ->map(fn (User $owner) => [
+                'id' => $owner->id,
+                'name' => $owner->name,
+                'is_shared' => true,
+                'is_default' => $default === $owner->id,
+            ]));
+    }
+
+    /**
+     * Il budget che si apre all'avvio.
+     *
+     * Si può eleggere anche uno condiviso: chi tiene i conti di casa su quello
+     * dell'altra persona non deve sceglierlo dal menù ogni volta. Tornare al
+     * proprio è la stessa azione con il proprio id, che si salva come nessuna
+     * scelta.
+     */
+    public function setDefaultBudget(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'budget_user_id' => 'required|integer|exists:users,id',
+        ]);
+
+        $user = $request->user();
+        $chosen = (int) $validated['budget_user_id'];
+
+        if ($chosen === $user->id) {
+            $user->update(['default_budget_user_id' => null]);
+
+            return back();
+        }
+
+        // Solo fra quelli condivisi con lui: il budget di un estraneo non si
+        // elegge a predefinito nemmeno provandoci a mano.
+        abort_unless($user->sharedBudgets()->whereKey($chosen)->exists(), 403);
+
+        $user->update(['default_budget_user_id' => $chosen]);
+
+        return back();
     }
 
     /**

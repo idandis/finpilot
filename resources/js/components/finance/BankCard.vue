@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { CreditCard, Wifi } from '@lucide/vue';
 import { computed } from 'vue';
+import { cardGradient } from '@/lib/card-gradient';
 import { CARD_ICONS } from '@/lib/card-icons';
 import type { CardIconName } from '@/lib/card-icons';
 import type { Card } from '@/types';
@@ -9,24 +10,11 @@ const props = defineProps<{
     card: Card;
 }>();
 
-function shade(hex: string, percent: number) {
-    const num = parseInt(hex.replace('#', ''), 16);
-    const amt = Math.round(2.55 * percent);
-    const r = Math.min(255, Math.max(0, (num >> 16) + amt));
-    const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00ff) + amt));
-    const b = Math.min(255, Math.max(0, (num & 0x0000ff) + amt));
-
-    return `#${(0x1000000 + r * 0x10000 + g * 0x100 + b).toString(16).slice(1)}`;
-}
-
 const baseColor = computed(
     () => props.card.color || props.card.financial_account?.color || '#1e293b',
 );
 
-const gradient = computed(
-    () =>
-        `linear-gradient(135deg, ${baseColor.value} 0%, ${shade(baseColor.value, -35)} 100%)`,
-);
+const gradient = computed(() => cardGradient(baseColor.value));
 
 const iconComponent = computed(() => {
     if (!props.card.icon) {
@@ -68,7 +56,11 @@ const iconComponent = computed(() => {
                 class="flex shrink-0 items-center gap-1 text-sm font-bold tracking-wide uppercase italic"
             >
                 <span v-if="card.circuit">{{ card.circuit }}</span>
-                <component :is="iconComponent" v-else-if="iconComponent" class="size-4" />
+                <component
+                    :is="iconComponent"
+                    v-else-if="iconComponent"
+                    class="size-4"
+                />
                 <CreditCard v-else class="size-4" />
             </div>
         </div>

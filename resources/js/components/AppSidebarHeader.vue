@@ -14,14 +14,19 @@ withDefaults(
 </script>
 
 <template>
+    <!--
+        Su telefono la barra si riduce a un filo d'aria sopra al contenuto:
+        le briciole di pane ripetevano il titolo che la pagina scrive già di
+        suo, e la freccia della sidebar ora sta nel menu in basso. Su schermo
+        largo la barra torna intera, dove il percorso serve a orientarsi e lo
+        spazio non manca.
+    -->
     <header
-        class="flex h-16 shrink-0 items-center gap-2 border-b border-sidebar-border/70 px-6 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 md:px-4"
+        class="flex h-[calc(1rem_+_env(safe-area-inset-top))] shrink-0 items-center gap-2 px-6 transition-[width,height] ease-linear md:h-16 md:border-b md:border-sidebar-border/70 md:px-4 md:group-has-data-[collapsible=icon]/sidebar-wrapper:h-12"
     >
-        <div class="flex items-center gap-2">
+        <div class="hidden items-center gap-2 md:flex">
             <SidebarTrigger class="-ml-1" />
-            <template v-if="breadcrumbs && breadcrumbs.length > 0">
-                <Breadcrumbs :breadcrumbs="breadcrumbs" />
-            </template>
+            <Breadcrumbs v-if="breadcrumbs.length > 0" :breadcrumbs="breadcrumbs" />
         </div>
     </header>
 </template>

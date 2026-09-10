@@ -5,6 +5,7 @@ import { formatAmount } from '@/lib/balance-sheet-format';
 
 interface Subcategory {
     id: number;
+    name: string;
 }
 
 interface Category {
@@ -33,14 +34,24 @@ const rowsOf = (type: string) => props.categories
         color: category.color,
         planned: category.subcategories.reduce((sum, sub) => sum + (props.planned[sub.id] || 0), 0),
         actual: category.subcategories.reduce((sum, sub) => sum + (props.actual[sub.id] || 0), 0),
+        subcategories: category.subcategories
+            .map((sub) => ({
+                id: sub.id,
+                name: sub.name,
+                planned: props.planned[sub.id] || 0,
+                actual: props.actual[sub.id] || 0,
+            }))
+            .filter((sub) => sub.planned > 0 || sub.actual > 0),
     }))
     .filter((row) => row.planned > 0 || row.actual > 0);
 
 // Entrate e uscite hanno ordini di grandezza diversi: ogni sezione porta i
 // propri totali, su cui si calcolano anche le percentuali.
 const sections = computed(() => [
-    { key: 'income', title: 'Entrate', actualLabel: 'Incassate', rows: rowsOf('income') },
-    { key: 'expense', title: 'Uscite', actualLabel: 'Effettive', rows: rowsOf('expense') },
+    // Sulle entrate le voci sono poche e dicono da dove arrivano i soldi:
+    // vale la pena mostrarle. Sulle uscite l'elenco diventerebbe lunghissimo.
+    { key: 'income', title: 'Entrate', actualLabel: 'Incassate', withSubcategories: true, rows: rowsOf('income') },
+    { key: 'expense', title: 'Uscite', actualLabel: 'Effettive', withSubcategories: false, rows: rowsOf('expense') },
 ].map((section) => {
     const plannedTotal = section.rows.reduce((sum, row) => sum + row.planned, 0);
     const actualTotal = section.rows.reduce((sum, row) => sum + row.actual, 0);
@@ -103,11 +114,8 @@ const isOpen = ref(false);
                         </div>
 
                         <div class="divide-y divide-border/60 border-y border-border/60">
-                            <div
-                                v-for="row in section.rows"
-                                :key="row.id"
-                                class="flex items-center gap-1.5 py-2 sm:gap-3"
-                            >
+                            <div v-for="row in section.rows" :key="row.id" class="py-2">
+                            <div class="flex items-center gap-1.5 sm:gap-3">
                                 <span class="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
                                     <span
                                         class="size-2.5 shrink-0 rounded-full"
@@ -145,9 +153,27 @@ const isOpen = ref(false);
                                     {{ formatAmount(row.planned - row.actual) }}
                                 </span>
                             </div>
+
+                            <div
+                                v-for="sub in (section.withSubcategories ? row.subcategories : [])"
+                                :key="sub.id"
+                                class="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground sm:gap-3"
+                            >
+                                <span class="min-w-0 flex-1 truncate pl-5">{{ sub.name }}</span>
+                                <span class="w-14 shrink-0 truncate text-right tabular-nums sm:w-28">
+                                    {{ formatAmount(sub.planned) }}
+                                </span>
+                                <span class="w-14 shrink-0 truncate text-right tabular-nums sm:w-28">
+                                    {{ formatAmount(sub.actual) }}
+                                </span>
+                                <span class="w-14 shrink-0 truncate text-right tabular-nums sm:w-24">
+                                    {{ formatAmount(sub.planned - sub.actual) }}
+                                </span>
+                            </div>
+                            </div>
                         </div>
 
-                        <div class="flex items-center gap-1.5 py-2 text-xs font-semibold tabular-nums sm:gap-3 sm:text-sm">
+                        <div class="mt-2 flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/60 px-3 py-2 text-xs font-semibold tabular-nums sm:gap-3 sm:text-sm dark:bg-muted/50">
                             <span class="min-w-0 flex-1">Totale {{ section.title.toLowerCase() }}</span>
                             <span class="w-14 shrink-0 truncate text-right sm:w-28">
                                 {{ formatAmount(section.plannedTotal) }}

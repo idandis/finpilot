@@ -29,6 +29,7 @@ import {
 import balanceSheetOverview from '@/routes/balance-sheet';
 import * as balanceSheetAssets from '@/routes/balance-sheet/assets';
 import * as balanceSheetEntries from '@/routes/balance-sheet/entries';
+import * as budgetAccounts from '@/routes/budget-accounts';
 import * as budgetCategories from '@/routes/budget-categories';
 import * as monthlyBudgets from '@/routes/monthly-budgets';
 import * as budgetExpenses from '@/routes/budget-expenses';
@@ -107,6 +108,12 @@ export const mainNavItems: NavItem[] = [
                 key: 'balance-sheet.budget.expenses',
                 href: budgetExpenses.index(),
                 icon: BookOpen,
+            },
+            {
+                title: 'Conti e carte',
+                key: 'balance-sheet.budget.accounts',
+                href: budgetAccounts.index(),
+                icon: CreditCard,
             },
             {
                 title: 'Configurazione',

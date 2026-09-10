@@ -8,9 +8,9 @@ const props = withDefaults(defineProps<{
     expected: number;
     expectedLabel: string;
     size?: 'md' | 'lg';
-    overIsBad?: boolean;
-    accent?: boolean;
-}>(), { size: 'md', overIsBad: false, accent: false });
+    /** Che cosa racconta l'anello: decide il colore, che non dipende dal valore. */
+    tone: 'income' | 'expense' | 'accent';
+}>(), { size: 'md' });
 
 const RADIUS = 46;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
@@ -23,18 +23,18 @@ const ratio = computed(() => {
     return Math.abs(props.amount) / Math.abs(props.expected);
 });
 
-// Stessi colori delle barre della pagina. Sforare è un male solo sulle uscite:
-// incassare o avanzare più dell'atteso resta verde.
-const isBad = computed(() => (props.overIsBad && ratio.value > 1) || props.amount < 0);
+// Il colore dell'anello dice di che cosa si tratta, non se va bene: entrate
+// verdi, uscite rosse, saldo nel colore dell'app.
+const ringClass = computed(() => ({
+    income: 'stroke-emerald-500',
+    expense: 'stroke-red-500',
+    accent: 'stroke-primary',
+}[props.tone]));
 
-// L'anello in evidenza porta il colore dell'app, gli altri il verde/rosso.
-const tone = computed(() => {
-    if (isBad.value) return { stroke: 'stroke-red-500', text: 'text-red-500' };
-
-    if (props.accent) return { stroke: 'stroke-primary', text: 'text-primary' };
-
-    return { stroke: 'stroke-emerald-500', text: 'text-emerald-500' };
-});
+// I numeri restano neutri: l'unica eccezione è il saldo sotto zero, dove il
+// segno è la notizia e va visto subito.
+const valueColorClass = computed(() =>
+    props.tone === 'accent' && props.amount < 0 ? 'text-red-500' : '');
 
 const dash = computed(() => Math.min(ratio.value, 1) * CIRCUMFERENCE);
 
@@ -77,18 +77,21 @@ const valueClass = computed(() => props.size === 'lg' ? 'text-2xl' : 'text-xl');
                 stroke-linecap="round"
                 :stroke-dasharray="`${dash} ${CIRCUMFERENCE - dash}`"
                 class="transition-all"
-                :class="tone.stroke"
+                :class="ringClass"
             />
         </svg>
 
         <div class="absolute inset-0 flex flex-col items-center justify-center px-3 text-center">
-            <span class="w-full truncate font-semibold tabular-nums" :class="valueClass">
+            <span
+                class="w-full truncate font-semibold tabular-nums"
+                :class="[valueClass, valueColorClass]"
+            >
                 {{ formatAmount(amount) }}
             </span>
             <span class="w-full truncate text-xs leading-tight text-muted-foreground">
                 {{ label }}
             </span>
-            <span class="w-full truncate text-[10px] leading-tight text-muted-foreground/70 tabular-nums">
+            <span class="w-full truncate text-xs leading-tight text-muted-foreground tabular-nums">
                 {{ expectedLabel }} {{ formatAmount(expected) }}
             </span>
         </div>

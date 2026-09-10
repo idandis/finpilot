@@ -136,7 +136,7 @@ const selectedCategory = ref(Object.keys(props.categories)[0]);
 
     <div class="mx-auto flex w-full max-w-[64rem] flex-col space-y-6 p-4">
         <div class="flex flex-wrap items-start justify-between gap-4">
-            <Heading :title="list.name" description="Clicca su un prodotto per segnarlo come comprato. Trascinalo per cambiarne la categoria." />
+            <Heading :title="list.name" />
             <SharedWith
                 :title="`Condividi &quot;${list.name}&quot;`"
                 :people="list.people"

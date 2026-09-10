@@ -3,6 +3,7 @@
 namespace Tests\Feature\Budget;
 
 use App\Models\BudgetCategory;
+use App\Models\FinancialAccount;
 use App\Models\MonthlyBudget;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -133,6 +134,47 @@ class BudgetSharingTest extends TestCase
             ->delete(route('budget.members.destroy', [$owner->id, $member->id]));
 
         $this->assertFalse($owner->fresh()->budgetMembers()->whereKey($member->id)->exists());
+    }
+
+    /**
+     * Il budget si condivide, i conti no.
+     *
+     * Chi riceve il budget vede i movimenti dell'altra persona, carta di
+     * provenienza compresa - è scritta sul movimento - ma dei conti veri e
+     * propri, con i loro saldi, vede solo i suoi.
+     */
+    public function test_a_member_sees_the_movements_of_the_owner_but_only_his_own_accounts()
+    {
+        $owner = User::factory()->create();
+        $member = User::factory()->create();
+        $owner->budgetMembers()->attach($member->id);
+
+        $hers = FinancialAccount::factory()->for($owner)->create([
+            'name' => 'Carta di lei',
+            'initial_balance' => 5000,
+        ]);
+        FinancialAccount::factory()->for($member)->create(['name' => 'Carta di lui']);
+
+        $september = MonthlyBudget::create(['user_id' => $owner->id, 'year' => 2026, 'month' => 9]);
+        $subcategory = $this->category($owner, 'Bollette')->subcategories()->create(['name' => 'Enel']);
+
+        $september->expenses()->create([
+            'budget_subcategory_id' => $subcategory->id,
+            'financial_account_id' => $hers->id,
+            'amount' => 80,
+            'recorded_at' => '2026-09-04 10:00:00',
+        ]);
+
+        $this->actingAs($member)
+            ->get(route('monthly-budgets.index', ['year' => 2026, 'month' => 9, 'budget' => $owner->id]))
+            ->assertInertia(fn ($page) => $page
+                // Il movimento c'è, e dice con che carta è stato pagato.
+                ->has('transactions', 1)
+                ->where('transactions.0.account_name', 'Carta di lei')
+                // Dei conti, però, si vede solo il proprio.
+                ->has('accounts', 1)
+                ->where('accounts.0.name', 'Carta di lui')
+            );
     }
 
     private function category(User $user, string $name): BudgetCategory
